@@ -7,6 +7,19 @@ import { ensureTenantScope } from '@/lib/tenant'
 
 export const dynamic = 'force-dynamic'
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(',')}]`
+  }
+
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right))
+    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJson(entryValue)}`).join(',')}}`
+  }
+
+  return JSON.stringify(value)
+}
+
 const bodySchema = z.object({
   organizationName: z.string().min(1),
   organizationSlug: z.string().min(1),
@@ -54,7 +67,7 @@ export async function POST(request: Request) {
 
   const serviceAccountName = parsed.data.serviceAccountName ?? `${parsed.data.organizationName} Automation`
   const desiredRules = parsed.data.rules as Record<string, unknown>
-  const desiredRulesJson = JSON.stringify(desiredRules)
+  const desiredRulesJson = stableJson(desiredRules)
 
   const existingPolicyProfile = await prisma.policyProfile.findFirst({
     where: {
@@ -87,7 +100,7 @@ export async function POST(request: Request) {
   const activePolicyVersion = policyProfile.versions.find((version) => version.isActive) ?? policyProfile.versions[0]
   let policyVersion = activePolicyVersion
 
-  if (!activePolicyVersion || JSON.stringify(activePolicyVersion.rules) !== desiredRulesJson) {
+  if (!activePolicyVersion || stableJson(activePolicyVersion.rules) !== desiredRulesJson) {
     await prisma.policyVersion.updateMany({
       where: {
         policyProfileId: policyProfile.id,
