@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'child_process'
 
 const port = process.env.PORT ?? '3000'
-const host = process.env.HOSTNAME ?? '0.0.0.0'
+const host = process.env.HOST ?? '0.0.0.0'
 
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 const next = process.platform === 'win32' ? 'node_modules/.bin/next.cmd' : 'node_modules/.bin/next'
