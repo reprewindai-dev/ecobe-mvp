@@ -1,18 +1,22 @@
+import type { Prisma, PrismaClient } from '@prisma/client'
+
 import { prisma } from './prisma'
+
+type TenantClient = PrismaClient | Prisma.TransactionClient
 
 export async function ensureTenantScope(input: {
   organizationName: string
   organizationSlug: string
   projectName: string
   projectSlug: string
-}) {
-  const organization = await prisma.organization.upsert({
+}, db: TenantClient = prisma) {
+  const organization = await db.organization.upsert({
     where: { slug: input.organizationSlug },
     update: { name: input.organizationName },
     create: { name: input.organizationName, slug: input.organizationSlug },
   })
 
-  const project = await prisma.project.upsert({
+  const project = await db.project.upsert({
     where: {
       organizationId_slug: {
         organizationId: organization.id,

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 import { requireAdmin, generateApiKey, generateServiceAccountKey } from '@/lib/auth'
@@ -48,173 +49,192 @@ export async function POST(request: Request) {
     return badRequest('Invalid bootstrap payload', parsed.error.flatten())
   }
 
-  const { organization, project } = await ensureTenantScope(parsed.data)
-
-  const environment = await prisma.environment.upsert({
-    where: {
-      projectId_slug: {
-        projectId: project.id,
-        slug: parsed.data.environmentSlug,
-      },
-    },
-    update: { name: parsed.data.environmentSlug },
-    create: {
-      projectId: project.id,
-      name: parsed.data.environmentSlug,
-      slug: parsed.data.environmentSlug,
-    },
-  })
-
   const serviceAccountName = parsed.data.serviceAccountName ?? `${parsed.data.organizationName} Automation`
   const desiredRules = parsed.data.rules as Record<string, unknown>
   const desiredRulesJson = stableJson(desiredRules)
 
-  const existingPolicyProfile = await prisma.policyProfile.findFirst({
-    where: {
-      organizationId: organization.id,
-      projectId: project.id,
-      name: parsed.data.policyName,
-    },
-    include: {
-      versions: {
-        orderBy: { version: 'desc' },
-      },
-    },
-  })
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const { organization, project } = await ensureTenantScope(parsed.data, tx)
 
-  const policyProfile =
-    existingPolicyProfile ??
-    (await prisma.policyProfile.create({
-      data: {
-        organizationId: organization.id,
-        projectId: project.id,
-        name: parsed.data.policyName,
-      },
-      include: {
-        versions: {
-          orderBy: { version: 'desc' },
-        },
-      },
-    }))
+        const environment = await tx.environment.upsert({
+          where: {
+            projectId_slug: {
+              projectId: project.id,
+              slug: parsed.data.environmentSlug,
+            },
+          },
+          update: { name: parsed.data.environmentSlug },
+          create: {
+            projectId: project.id,
+            name: parsed.data.environmentSlug,
+            slug: parsed.data.environmentSlug,
+          },
+        })
 
-  const activePolicyVersion = policyProfile.versions.find((version) => version.isActive) ?? policyProfile.versions[0]
-  let policyVersion = activePolicyVersion
+        const existingPolicyProfile = await tx.policyProfile.findFirst({
+          where: {
+            organizationId: organization.id,
+            projectId: project.id,
+            name: parsed.data.policyName,
+          },
+          include: {
+            versions: {
+              orderBy: { version: 'desc' },
+            },
+          },
+        })
 
-  if (!activePolicyVersion || stableJson(activePolicyVersion.rules) !== desiredRulesJson) {
-    await prisma.policyVersion.updateMany({
-      where: {
-        policyProfileId: policyProfile.id,
-        isActive: true,
-      },
-      data: { isActive: false },
-    })
+        const policyProfile =
+          existingPolicyProfile ??
+          (await tx.policyProfile.create({
+            data: {
+              organizationId: organization.id,
+              projectId: project.id,
+              name: parsed.data.policyName,
+            },
+            include: {
+              versions: {
+                orderBy: { version: 'desc' },
+              },
+            },
+          }))
 
-    policyVersion = await prisma.policyVersion.create({
-      data: {
-        policyProfileId: policyProfile.id,
-        version: (policyProfile.versions[0]?.version ?? 0) + 1,
-        isActive: true,
-        rules: desiredRules as any,
-      },
-    })
-  }
+        const activePolicyVersion = policyProfile.versions.find((version) => version.isActive) ?? policyProfile.versions[0]
+        let policyVersion = activePolicyVersion
 
-  const existingApiKeys = await prisma.apiKey.findMany({
-    where: {
-      organizationId: organization.id,
-      projectId: project.id,
-      name: parsed.data.keyName,
-      status: 'active',
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+        if (!activePolicyVersion || stableJson(activePolicyVersion.rules) !== desiredRulesJson) {
+          await tx.policyVersion.updateMany({
+            where: {
+              policyProfileId: policyProfile.id,
+              isActive: true,
+            },
+            data: { isActive: false },
+          })
 
-  if (existingApiKeys.length && parsed.data.rotateCredentials) {
-    await prisma.apiKey.updateMany({
-      where: {
-        id: {
-          in: existingApiKeys.map((key) => key.id),
-        },
-      },
-      data: { status: 'revoked' },
-    })
-  }
+          policyVersion = await tx.policyVersion.create({
+            data: {
+              policyProfileId: policyProfile.id,
+              version: (policyProfile.versions[0]?.version ?? 0) + 1,
+              isActive: true,
+              rules: desiredRules as any,
+            },
+          })
+        }
 
-  const shouldCreateApiKey = parsed.data.rotateCredentials || existingApiKeys.length === 0
-  const generated = shouldCreateApiKey ? generateApiKey() : null
-  const apiKey = shouldCreateApiKey
-    ? await prisma.apiKey.create({
-        data: {
+        const existingApiKeys = await tx.apiKey.findMany({
+          where: {
+            organizationId: organization.id,
+            projectId: project.id,
+            name: parsed.data.keyName,
+            status: 'active',
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+
+        if (existingApiKeys.length && parsed.data.rotateCredentials) {
+          await tx.apiKey.updateMany({
+            where: {
+              id: {
+                in: existingApiKeys.map((key) => key.id),
+              },
+            },
+            data: { status: 'revoked' },
+          })
+        }
+
+        const shouldCreateApiKey = parsed.data.rotateCredentials || existingApiKeys.length === 0
+        const generated = shouldCreateApiKey ? generateApiKey() : null
+        const apiKey = shouldCreateApiKey
+          ? await tx.apiKey.create({
+              data: {
+                organizationId: organization.id,
+                projectId: project.id,
+                name: parsed.data.keyName,
+                prefix: generated!.prefix,
+                keyHash: generated!.hash,
+                scopes: ['runs:write', 'runs:read', 'usage:read'],
+              },
+            })
+          : existingApiKeys[0]
+
+        const existingServiceAccounts = await tx.serviceAccount.findMany({
+          where: {
+            organizationId: organization.id,
+            name: serviceAccountName,
+            status: 'active',
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+
+        if (existingServiceAccounts.length && parsed.data.rotateCredentials) {
+          await tx.serviceAccount.updateMany({
+            where: {
+              id: {
+                in: existingServiceAccounts.map((account) => account.id),
+              },
+            },
+            data: { status: 'revoked' },
+          })
+        }
+
+        const shouldCreateServiceAccount = parsed.data.rotateCredentials || existingServiceAccounts.length === 0
+        const serviceAccountCredential = shouldCreateServiceAccount ? generateServiceAccountKey() : null
+        const serviceAccount = shouldCreateServiceAccount
+          ? await tx.serviceAccount.create({
+              data: {
+                organizationId: organization.id,
+                name: serviceAccountName,
+                prefix: serviceAccountCredential!.prefix,
+                secretHash: serviceAccountCredential!.hash,
+                scopes: [
+                  'dashboard:read',
+                  'keys:read',
+                  'keys:write',
+                  'policies:read',
+                  'policies:write',
+                  'webhooks:read',
+                  'webhooks:write',
+                ],
+              },
+            })
+          : existingServiceAccounts[0]
+
+        await tx.billingAccount.upsert({
+          where: { organizationId: organization.id },
+          update: {},
+          create: {
+            organizationId: organization.id,
+            status: 'active',
+          },
+        })
+
+        return {
           organizationId: organization.id,
           projectId: project.id,
-          name: parsed.data.keyName,
-          prefix: generated!.prefix,
-          keyHash: generated!.hash,
-          scopes: ['runs:write', 'runs:read', 'usage:read'],
-        },
+          environmentId: environment.id,
+          policyVersionId: policyVersion.id,
+          apiKeyId: apiKey.id,
+          apiKey: generated?.plaintext ?? null,
+          serviceAccountId: serviceAccount.id,
+          serviceAccountKey: serviceAccountCredential?.plaintext ?? null,
+          credentialsRotated: shouldCreateApiKey || shouldCreateServiceAccount,
+        }
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       })
-    : existingApiKeys[0]
 
-  const existingServiceAccounts = await prisma.serviceAccount.findMany({
-    where: {
-      organizationId: organization.id,
-      name: serviceAccountName,
-      status: 'active',
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+      return json(result, { status: 201 })
+    } catch (error) {
+      const isSerializationConflict =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034'
 
-  if (existingServiceAccounts.length && parsed.data.rotateCredentials) {
-    await prisma.serviceAccount.updateMany({
-      where: {
-        id: {
-          in: existingServiceAccounts.map((account) => account.id),
-        },
-      },
-      data: { status: 'revoked' },
-    })
+      if (!isSerializationConflict || attempt === 2) {
+        throw error
+      }
+    }
   }
 
-  const shouldCreateServiceAccount = parsed.data.rotateCredentials || existingServiceAccounts.length === 0
-  const serviceAccountCredential = shouldCreateServiceAccount ? generateServiceAccountKey() : null
-  const serviceAccount = shouldCreateServiceAccount
-    ? await prisma.serviceAccount.create({
-        data: {
-          organizationId: organization.id,
-          name: serviceAccountName,
-          prefix: serviceAccountCredential!.prefix,
-          secretHash: serviceAccountCredential!.hash,
-          scopes: [
-            'dashboard:read',
-            'keys:read',
-            'keys:write',
-            'policies:read',
-            'policies:write',
-            'webhooks:read',
-            'webhooks:write',
-          ],
-        },
-      })
-    : existingServiceAccounts[0]
-
-  await prisma.billingAccount.upsert({
-    where: { organizationId: organization.id },
-    update: {},
-    create: {
-      organizationId: organization.id,
-      status: 'active',
-    },
-  })
-
-  return json({
-    organizationId: organization.id,
-    projectId: project.id,
-    environmentId: environment.id,
-    policyVersionId: policyVersion.id,
-    apiKeyId: apiKey.id,
-    apiKey: generated?.plaintext ?? null,
-    serviceAccountId: serviceAccount.id,
-    serviceAccountKey: serviceAccountCredential?.plaintext ?? null,
-    credentialsRotated: shouldCreateApiKey || shouldCreateServiceAccount,
-  }, { status: 201 })
+  throw new Error('Bootstrap transaction failed')
 }
