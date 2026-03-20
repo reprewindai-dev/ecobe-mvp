@@ -36,6 +36,16 @@ export async function POST(request: Request) {
     return badRequest('Invalid run payload', parsed.error.flatten())
   }
 
-  const envelope = await orchestrateRun(apiKey, parsed.data)
-  return json(envelope, { status: envelope.status === 'completed' ? 201 : 200 })
+  try {
+    const envelope = await orchestrateRun(apiKey, parsed.data)
+    return json(envelope, { status: envelope.status === 'completed' ? 201 : 200 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Run execution failed'
+    const status =
+      message.includes('requires tier_3') || message.includes('Billing account is canceled')
+        ? 402
+        : 500
+
+    return json({ error: message }, { status })
+  }
 }

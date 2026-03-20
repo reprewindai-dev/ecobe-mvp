@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 
+import Stripe from 'stripe'
+
 import { prisma } from './prisma'
 import { env } from './env'
 
@@ -11,6 +13,14 @@ type StripeEvent = {
     object?: Record<string, any>
   }
 }
+
+export type PlanTier = 'tier_1' | 'tier_2' | 'tier_3'
+
+const stripe = env.STRIPE_SECRET_KEY
+  ? new Stripe(env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-02-25.clover',
+    })
+  : null
 
 export async function processStripeWebhook(rawBody: string, signatureHeader: string | null) {
   const event = parseStripeEvent(rawBody, signatureHeader)
@@ -46,6 +56,188 @@ export async function processStripeWebhook(rawBody: string, signatureHeader: str
   }
 
   return event
+}
+
+export async function createStripeCheckoutSession(input: {
+  organizationId: string
+  organizationSlug: string
+  organizationName: string
+  planTier: PlanTier
+  successUrl?: string | null
+  cancelUrl?: string | null
+}) {
+  const client = requireStripe()
+  const billingAccount = await ensureStripeCustomer({
+    organizationId: input.organizationId,
+    organizationSlug: input.organizationSlug,
+    organizationName: input.organizationName,
+  })
+
+  const priceId = priceIdForPlanTier(input.planTier)
+  if (!priceId) {
+    throw new Error(`Missing Stripe price id for ${input.planTier}`)
+  }
+
+  const session = await client.checkout.sessions.create({
+    mode: 'subscription',
+    customer: billingAccount.stripeCustomerId ?? undefined,
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: resolveCheckoutUrl(input.successUrl, env.STRIPE_CHECKOUT_SUCCESS_URL, '/billing/success'),
+    cancel_url: resolveCheckoutUrl(input.cancelUrl, env.STRIPE_CHECKOUT_CANCEL_URL, '/billing/cancel'),
+    allow_promotion_codes: true,
+    metadata: {
+      organizationId: input.organizationId,
+      organizationSlug: input.organizationSlug,
+      planTier: input.planTier,
+    },
+    subscription_data: {
+      metadata: {
+        organizationId: input.organizationId,
+        organizationSlug: input.organizationSlug,
+        planTier: input.planTier,
+      },
+    },
+  })
+
+  return {
+    sessionId: session.id,
+    url: session.url,
+    customerId: billingAccount.stripeCustomerId,
+    planTier: input.planTier,
+  }
+}
+
+export async function createStripePortalSession(input: {
+  organizationId: string
+  organizationSlug: string
+  organizationName: string
+  returnUrl?: string | null
+}) {
+  const client = requireStripe()
+  const billingAccount = await ensureStripeCustomer({
+    organizationId: input.organizationId,
+    organizationSlug: input.organizationSlug,
+    organizationName: input.organizationName,
+  })
+
+  if (!billingAccount.stripeCustomerId) {
+    throw new Error('Stripe customer is not configured')
+  }
+
+  const session = await client.billingPortal.sessions.create({
+    customer: billingAccount.stripeCustomerId,
+    return_url: resolveCheckoutUrl(input.returnUrl, env.STRIPE_PORTAL_RETURN_URL, '/settings/billing'),
+  })
+
+  return {
+    url: session.url,
+    customerId: billingAccount.stripeCustomerId,
+  }
+}
+
+export async function getBillingSnapshot(organizationId: string) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      planTier: true,
+      billingAccount: {
+        include: {
+          subscriptions: {
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+          },
+          invoices: {
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          },
+        },
+      },
+    },
+  })
+
+  if (!organization) {
+    throw new Error('Organization not found')
+  }
+
+  const currentSubscription = organization.billingAccount?.subscriptions[0] ?? null
+
+  return {
+    organization: {
+      id: organization.id,
+      slug: organization.slug,
+      name: organization.name,
+      planTier: organization.planTier,
+    },
+    billing: organization.billingAccount
+      ? {
+          status: organization.billingAccount.status,
+          stripeCustomerId: organization.billingAccount.stripeCustomerId,
+          currentSubscription,
+          recentInvoices: organization.billingAccount.invoices,
+          portalEnabled: Boolean(stripe && organization.billingAccount.stripeCustomerId),
+        }
+      : {
+          status: 'active',
+          stripeCustomerId: null,
+          currentSubscription: null,
+          recentInvoices: [],
+          portalEnabled: Boolean(stripe),
+        },
+  }
+}
+
+export async function assertRunEntitlements(organizationId: string, payload: Record<string, any>) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    include: {
+      billingAccount: {
+        include: {
+          subscriptions: {
+            where: {
+              status: {
+                in: ['active', 'past_due'],
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      },
+    },
+  })
+
+  if (!organization) {
+    throw new Error('Organization not found')
+  }
+
+  if (organization.billingAccount?.status === 'canceled') {
+    throw new Error('Billing account is canceled')
+  }
+
+  const planTier = normalizePlanTier(organization.billingAccount?.subscriptions[0]?.planTier ?? organization.planTier)
+  const providers = Array.isArray(payload.providerConstraints?.providers) ? payload.providerConstraints.providers : []
+  const preferredRegions = Array.isArray(payload.providerConstraints?.preferredRegions)
+    ? payload.providerConstraints.preferredRegions
+    : []
+  const hasCarbonPolicy = Boolean(
+    payload.carbonPolicy && typeof payload.carbonPolicy === 'object' && Object.keys(payload.carbonPolicy).length
+  )
+
+  if (planTier === 'tier_1' && (providers.length > 1 || preferredRegions.length > 1 || hasCarbonPolicy)) {
+    throw new Error('Advanced routing requires tier_3')
+  }
+
+  if (planTier === 'tier_2' && hasCarbonPolicy) {
+    throw new Error('Carbon policy routing requires tier_3')
+  }
+
+  return {
+    planTier,
+    billingStatus: organization.billingAccount?.status ?? 'active',
+  }
 }
 
 function parseStripeEvent(rawBody: string, signatureHeader: string | null): StripeEvent {
@@ -149,6 +341,43 @@ async function handleStripeEvent(event: StripeEvent, organizationId: string) {
   }
 }
 
+async function ensureStripeCustomer(input: {
+  organizationId: string
+  organizationSlug: string
+  organizationName: string
+}) {
+  const client = requireStripe()
+  const existing = await prisma.billingAccount.findUnique({
+    where: { organizationId: input.organizationId },
+  })
+
+  if (existing?.stripeCustomerId) {
+    await client.customers.update(existing.stripeCustomerId, {
+      name: input.organizationName,
+      metadata: {
+        organizationId: input.organizationId,
+        organizationSlug: input.organizationSlug,
+      },
+    })
+
+    return existing
+  }
+
+  const customer = await client.customers.create({
+    name: input.organizationName,
+    metadata: {
+      organizationId: input.organizationId,
+      organizationSlug: input.organizationSlug,
+    },
+  })
+
+  return upsertBillingAccount({
+    organizationId: input.organizationId,
+    stripeCustomerId: customer.id,
+    status: 'active',
+  })
+}
+
 async function upsertBillingAccount(input: {
   organizationId: string
   stripeCustomerId?: string | null
@@ -180,12 +409,14 @@ async function syncSubscription(organizationId: string, object: Record<string, a
     throw new Error('Stripe subscription event missing subscription id')
   }
 
+  const planTier = extractPlanTier(object)
+
   await prisma.subscription.upsert({
     where: {
       externalSubscriptionId: subscriptionId,
     },
     update: {
-      planTier: extractPlanTier(object),
+      planTier,
       status: mapStripeStatus(object.status),
       currentPeriodStart: toDate(object.current_period_start),
       currentPeriodEnd: toDate(object.current_period_end),
@@ -194,13 +425,20 @@ async function syncSubscription(organizationId: string, object: Record<string, a
     create: {
       billingAccountId: billingAccount.id,
       externalSubscriptionId: subscriptionId,
-      planTier: extractPlanTier(object),
+      planTier,
       status: mapStripeStatus(object.status),
       currentPeriodStart: toDate(object.current_period_start),
       currentPeriodEnd: toDate(object.current_period_end),
       cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
     },
   })
+
+  if (mapStripeStatus(object.status) === 'active') {
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { planTier },
+    })
+  }
 }
 
 async function syncInvoice(organizationId: string, object: Record<string, any>) {
@@ -287,6 +525,14 @@ async function recordWebhookDelivery(input: {
   })
 }
 
+function requireStripe() {
+  if (!stripe) {
+    throw new Error('Stripe is not configured')
+  }
+
+  return stripe
+}
+
 function extractCustomerId(object: Record<string, any>) {
   if (typeof object.customer === 'string') {
     return object.customer
@@ -299,13 +545,20 @@ function extractCustomerId(object: Record<string, any>) {
   return null
 }
 
-function extractPlanTier(object: Record<string, any>) {
-  return (
+function extractPlanTier(object: Record<string, any>): PlanTier {
+  const rawTier =
     object.metadata?.planTier ??
     object.items?.data?.[0]?.price?.lookup_key ??
     object.items?.data?.[0]?.price?.nickname ??
     'tier_2'
-  )
+
+  return normalizePlanTier(rawTier)
+}
+
+function normalizePlanTier(value: string): PlanTier {
+  if (value === 'tier_1') return 'tier_1'
+  if (value === 'tier_3') return 'tier_3'
+  return 'tier_2'
 }
 
 function mapStripeStatus(status?: string): 'active' | 'past_due' | 'canceled' {
@@ -338,6 +591,28 @@ function mapInvoiceStatus(status?: string): 'active' | 'past_due' | 'canceled' {
   }
 
   return 'active'
+}
+
+function priceIdForPlanTier(planTier: PlanTier) {
+  if (planTier === 'tier_1') return env.STRIPE_TIER_1_PRICE_ID
+  if (planTier === 'tier_3') return env.STRIPE_TIER_3_PRICE_ID
+  return env.STRIPE_TIER_2_PRICE_ID
+}
+
+function resolveCheckoutUrl(explicit: string | null | undefined, configured: string, fallbackPath: string) {
+  if (explicit) {
+    return explicit
+  }
+
+  if (configured) {
+    return configured
+  }
+
+  if (env.NEXT_PUBLIC_APP_URL) {
+    return `${env.NEXT_PUBLIC_APP_URL}${fallbackPath}`
+  }
+
+  throw new Error(`Missing billing return URL for ${fallbackPath}`)
 }
 
 function toDate(value?: number | string | null) {

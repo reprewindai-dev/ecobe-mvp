@@ -190,6 +190,8 @@ export async function POST(request: Request) {
                 secretHash: serviceAccountCredential!.hash,
                 scopes: [
                   'dashboard:read',
+                  'billing:read',
+                  'billing:write',
                   'keys:read',
                   'keys:write',
                   'policies:read',

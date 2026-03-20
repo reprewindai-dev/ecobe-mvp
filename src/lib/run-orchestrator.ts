@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 
 import { prisma } from './prisma'
 import { createRunEvent } from './audit'
+import { assertRunEntitlements } from './billing'
 import { evaluateSeked } from './seked'
 import { evaluateConvergeos } from './convergeos'
 import { createRoutingDecision, executeAllocation } from './engine'
@@ -14,6 +15,8 @@ export async function orchestrateRun(apiKey: any, payload: Record<string, any>) 
   if (!projectId) {
     throw new Error('API key is not scoped to a project')
   }
+
+  await assertRunEntitlements(organizationId, payload)
 
   const environment = await prisma.environment.upsert({
     where: {
