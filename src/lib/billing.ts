@@ -240,6 +240,151 @@ export async function assertRunEntitlements(organizationId: string, payload: Rec
   }
 }
 
+export async function previewUsageInvoice(input: {
+  organizationId: string
+  periodStart?: Date | null
+  periodEnd?: Date | null
+}) {
+  const billingAccount = await prisma.billingAccount.findUnique({
+    where: { organizationId: input.organizationId },
+    include: {
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          planTier: true,
+        },
+      },
+    },
+  })
+
+  if (!billingAccount) {
+    throw new Error('Billing account not found')
+  }
+
+  const usageRecords = await prisma.usageRecord.findMany({
+    where: {
+      organizationId: input.organizationId,
+      recordedAt: {
+        gte: input.periodStart ?? undefined,
+        lte: input.periodEnd ?? undefined,
+      },
+    },
+    orderBy: { recordedAt: 'asc' },
+  })
+
+  const lineItemsMap = new Map<string, {
+    description: string
+    quantity: number
+    amount: number
+    unit: string
+    metric: string
+  }>()
+
+  for (const record of usageRecords) {
+    const key = `${record.metric}:${record.unit}`
+    const existing = lineItemsMap.get(key)
+
+    if (existing) {
+      existing.quantity += record.quantity
+      existing.amount += record.amountUsd
+      continue
+    }
+
+    lineItemsMap.set(key, {
+      description: `${record.metric} (${record.unit})`,
+      quantity: record.quantity,
+      amount: record.amountUsd,
+      unit: record.unit,
+      metric: record.metric,
+    })
+  }
+
+  const lineItems = Array.from(lineItemsMap.values()).map((item) => ({
+    description: item.description,
+    quantity: Number(item.quantity.toFixed(4)),
+    unitAmount: item.quantity > 0 ? Number((item.amount / item.quantity).toFixed(4)) : 0,
+    amount: Number(item.amount.toFixed(2)),
+    currency: 'USD',
+    metadata: {
+      metric: item.metric,
+      unit: item.unit,
+    },
+  }))
+
+  const amountDue = Number(lineItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2))
+
+  return {
+    organization: billingAccount.organization,
+    billingAccountId: billingAccount.id,
+    stripeCustomerId: billingAccount.stripeCustomerId,
+    periodStart: input.periodStart ?? (usageRecords[0]?.recordedAt ?? null),
+    periodEnd: input.periodEnd ?? (usageRecords[usageRecords.length - 1]?.recordedAt ?? null),
+    usageRecordCount: usageRecords.length,
+    amountDue,
+    currency: 'USD',
+    lineItems,
+  }
+}
+
+export async function generateInternalInvoice(input: {
+  organizationId: string
+  periodStart?: Date | null
+  periodEnd?: Date | null
+}) {
+  const preview = await previewUsageInvoice(input)
+  const billingAccountId = preview.billingAccountId
+  const periodStart = preview.periodStart
+  const periodEnd = preview.periodEnd
+
+  const existingInvoice =
+    periodStart && periodEnd
+      ? await prisma.invoice.findFirst({
+          where: {
+            billingAccountId,
+            externalInvoiceId: null,
+            periodStart,
+            periodEnd,
+          },
+          include: {
+            lineItems: true,
+          },
+        })
+      : null
+
+  if (existingInvoice) {
+    return existingInvoice
+  }
+
+  const invoice = await prisma.invoice.create({
+    data: {
+      billingAccountId,
+      amountDue: preview.amountDue,
+      amountPaid: 0,
+      currency: preview.currency,
+      status: 'active',
+      periodStart: periodStart ?? undefined,
+      periodEnd: periodEnd ?? undefined,
+      lineItems: {
+        create: preview.lineItems.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unitAmount: item.unitAmount,
+          amount: item.amount,
+          currency: item.currency,
+          metadata: item.metadata,
+        })),
+      },
+    },
+    include: {
+      lineItems: true,
+    },
+  })
+
+  return invoice
+}
+
 function parseStripeEvent(rawBody: string, signatureHeader: string | null): StripeEvent {
   if (env.STRIPE_WEBHOOK_SECRET) {
     verifyStripeSignature(rawBody, signatureHeader, env.STRIPE_WEBHOOK_SECRET)
