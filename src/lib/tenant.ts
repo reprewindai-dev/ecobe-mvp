@@ -33,3 +33,14 @@ export async function ensureTenantScope(input: {
 
   return { organization, project }
 }
+
+export async function ensureOrganizationScope(input: {
+  organizationName: string
+  organizationSlug: string
+}, db: TenantClient = prisma) {
+  return db.organization.upsert({
+    where: { slug: input.organizationSlug },
+    update: { name: input.organizationName },
+    create: { name: input.organizationName, slug: input.organizationSlug },
+  })
+}
