@@ -21,6 +21,7 @@ export const env = {
   STRIPE_CHECKOUT_CANCEL_URL: (process.env.STRIPE_CHECKOUT_CANCEL_URL ?? '').replace(/\/$/, ''),
   STRIPE_PORTAL_RETURN_URL: (process.env.STRIPE_PORTAL_RETURN_URL ?? '').replace(/\/$/, ''),
   AUDIT_SIGNING_SECRET: process.env.AUDIT_SIGNING_SECRET ?? 'development-audit-secret',
+  WEBHOOK_SECRET_ENCRYPTION_KEY: process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ?? '',
   ECOBE_ADMIN_TOKEN: process.env.ECOBE_ADMIN_TOKEN ?? 'ecobe-admin-local',
   NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME ?? 'ECOBE Control Plane',
 }

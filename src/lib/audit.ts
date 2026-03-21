@@ -1,5 +1,6 @@
 import { createHmac } from 'crypto'
 
+import { dispatchRunEventWebhooks } from './customer-webhooks'
 import { prisma } from './prisma'
 import { env } from './env'
 
@@ -12,7 +13,7 @@ export function signAuditPayload(payload: unknown) {
 export async function createRunEvent(runId: string, organizationId: string, eventType: string, payload: unknown) {
   const signature = signAuditPayload(payload)
 
-  return prisma.runEvent.create({
+  const event = await prisma.runEvent.create({
     data: {
       runId,
       organizationId,
@@ -21,4 +22,8 @@ export async function createRunEvent(runId: string, organizationId: string, even
       signature,
     },
   })
+
+  await dispatchRunEventWebhooks(event)
+
+  return event
 }

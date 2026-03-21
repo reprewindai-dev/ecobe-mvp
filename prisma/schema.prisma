@@ -289,6 +289,7 @@ model WebhookEndpoint {
   organizationId String
   url            String
   secretHash     String
+  encryptedSecret String?
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   deliveries     WebhookDelivery[]
