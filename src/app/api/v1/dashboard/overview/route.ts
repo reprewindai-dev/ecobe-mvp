@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
   const organizationWhere = access.isPlatformAdmin ? undefined : { organizationId: access.organizationId }
 
-  const [organizations, runs, policies, usage] = await Promise.all([
+  const [organizations, runs, policies, usage, pendingApprovals, openAlerts, auditExports, complianceReports] = await Promise.all([
     prisma.organization.count({
       where: access.isPlatformAdmin ? undefined : { id: access.organizationId },
     }),
@@ -27,6 +27,23 @@ export async function GET(request: Request) {
       where: organizationWhere,
       _sum: { amountUsd: true },
     }),
+    prisma.approvalRequest.count({
+      where: {
+        status: 'pending',
+        ...(access.isPlatformAdmin ? {} : { organizationId: access.organizationId }),
+      },
+    }),
+    prisma.alert.count({
+      where: {
+        ...(access.isPlatformAdmin ? {} : { organizationId: access.organizationId }),
+      },
+    }),
+    prisma.auditExport.count({
+      where: access.isPlatformAdmin ? undefined : { organizationId: access.organizationId },
+    }),
+    prisma.complianceReport.count({
+      where: access.isPlatformAdmin ? undefined : { organizationId: access.organizationId },
+    }),
   ])
 
   return json({
@@ -34,5 +51,9 @@ export async function GET(request: Request) {
     runs,
     activePolicies: policies,
     estimatedRevenue: usage._sum.amountUsd ?? 0,
+    pendingApprovals,
+    openAlerts,
+    auditExports,
+    complianceReports,
   })
 }

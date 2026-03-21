@@ -341,8 +341,16 @@ model AuditExport {
   runId          String?
   format         String
   status         String
+  filters        Json         @default("{}")
+  artifact       Json?
+  checksum       String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  completedAt    DateTime?
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
 }
 
 model ComplianceReport {
@@ -350,6 +358,14 @@ model ComplianceReport {
   organizationId String
   reportType     String
   status         String
+  framework      String       @default("seked_control_plane")
+  summary        Json         @default("{}")
+  findings       Json         @default("[]")
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  completedAt    DateTime?
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
 }
