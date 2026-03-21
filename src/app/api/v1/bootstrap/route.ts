@@ -189,6 +189,9 @@ export async function POST(request: Request) {
                 prefix: serviceAccountCredential!.prefix,
                 secretHash: serviceAccountCredential!.hash,
                 scopes: [
+                  'alerts:read',
+                  'approvals:read',
+                  'approvals:write',
                   'dashboard:read',
                   'billing:read',
                   'billing:write',
