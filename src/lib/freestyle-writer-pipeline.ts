@@ -992,7 +992,7 @@ function containsNearDuplicate(values: string[], candidate: string) {
   )
 }
 
-function takeDistinctLines(pool: Array<string | undefined>, count: number, exclude: string[] = []) {
+function takeDistinctLines(pool: Array<string | undefined>, count: number, exclude: string[] = [], minWords = 1) {
   const picked: string[] = []
   const blocked = exclude.filter(Boolean)
 
@@ -1001,7 +1001,7 @@ function takeDistinctLines(pool: Array<string | undefined>, count: number, exclu
       continue
     }
     const sanitized = sanitizeLine(candidate)
-    if (!sanitized || containsNearDuplicate([...blocked, ...picked], sanitized)) {
+    if (!sanitized || countWords(sanitized) < minWords || containsNearDuplicate([...blocked, ...picked], sanitized)) {
       continue
     }
     picked.push(sanitized)
@@ -1020,9 +1020,9 @@ function ensureVerseHighlight(
   fallbackPool: string[],
   exclude: string[] = [],
 ) {
-  const verse = takeDistinctLines([highlightBar, ...verseLines, ...fallbackPool], minimumCount, exclude)
+  const verse = takeDistinctLines([highlightBar, ...verseLines, ...fallbackPool], minimumCount, exclude, 4)
   if (verse.length < minimumCount) {
-    return takeDistinctLines([highlightBar, ...verse, ...fallbackPool], minimumCount, exclude)
+    return takeDistinctLines([highlightBar, ...verse, ...fallbackPool], minimumCount, exclude, 4)
   }
   return verse
 }
@@ -1036,7 +1036,24 @@ function ensureVerseDensity(
   if (verseLines.length >= minimumCount) {
     return verseLines
   }
-  return takeDistinctLines([...verseLines, ...fallbackPool], minimumCount, exclude)
+  return takeDistinctLines([...verseLines, ...fallbackPool], minimumCount, exclude, 4)
+}
+
+function balanceVerseSection(lines: string[], hookLines: string[]) {
+  const balanced: string[] = []
+
+  for (const line of lines) {
+    const comparable = stripSectionLabels(line).toLowerCase()
+    if (hookLines.some((hookLine) => similarity(stripSectionLabels(hookLine).toLowerCase(), comparable) >= 0.9)) {
+      continue
+    }
+    if (balanced.some((existing) => similarity(stripSectionLabels(existing).toLowerCase(), comparable) >= 0.82)) {
+      continue
+    }
+    balanced.push(line)
+  }
+
+  return balanced.length > 0 ? balanced : lines
 }
 
 function buildCompositePool(lines: string[]) {
@@ -1207,6 +1224,12 @@ function buildVariantLines(
   sourceLines: string[],
 ) {
   const compositePool = buildCompositePool([...skeleton.verse_lines, ...sourceLines])
+  const verseFallbackPool = takeDistinctLines(
+    [...skeleton.verse_lines, ...compositePool, ...sourceLines],
+    18,
+    skeleton.hook_lines,
+    4,
+  )
   const hookLines = takeDistinctLines(
     [
       ...skeleton.hook_lines,
@@ -1215,20 +1238,23 @@ function buildVariantLines(
       ...compositePool,
     ],
     style === 'melodic' ? 3 : 2,
+    [],
+    4,
   )
-  const verseOne = ensureVerseHighlight(
+  const verseOne = balanceVerseSection(ensureVerseHighlight(
     skeleton.verse_one_lines,
     skeleton.highlight_bars[0] ?? hookLines[0] ?? sourceLines[0],
     skeleton.minimum_unique_verse_lines,
-    [...compositePool, ...hookLines, ...sourceLines],
-  )
-  const verseTwo = ensureVerseHighlight(
+    verseFallbackPool,
+    [...hookLines],
+  ), hookLines)
+  const verseTwo = balanceVerseSection(ensureVerseHighlight(
     skeleton.verse_two_lines,
     skeleton.highlight_bars[1] ?? skeleton.highlight_bars[0] ?? hookLines[0] ?? sourceLines[0],
     skeleton.minimum_unique_verse_lines,
-    [...compositePool.slice().reverse(), ...hookLines, ...sourceLines],
-    verseOne,
-  )
+    [...verseFallbackPool.slice().reverse(), ...verseFallbackPool],
+    [...hookLines, ...verseOne],
+  ), hookLines)
   const outroLines = takeDistinctLines(
     [
       skeleton.highlight_bars[1],
@@ -1239,6 +1265,7 @@ function buildVariantLines(
     ],
     style === 'melodic' || style === 'hybrid' ? 2 : 1,
     [...hookLines, ...verseOne, ...verseTwo],
+    4,
   )
 
   const sections: Array<[string, string[]]> = style === 'melodic'
@@ -1251,9 +1278,9 @@ function buildVariantLines(
       ]
     : style === 'fast'
       ? [
-          ['Verse 1', ensureVerseDensity(verseOne, skeleton.minimum_unique_verse_lines + 1, sourceLines, hookLines)],
+          ['Verse 1', balanceVerseSection(ensureVerseDensity(verseOne, skeleton.minimum_unique_verse_lines + 1, verseFallbackPool, hookLines), hookLines)],
           ['Hook', hookLines],
-          ['Verse 2', ensureVerseDensity(verseTwo, skeleton.minimum_unique_verse_lines + 1, sourceLines, [...hookLines, ...verseOne])],
+          ['Verse 2', balanceVerseSection(ensureVerseDensity(verseTwo, skeleton.minimum_unique_verse_lines + 1, verseFallbackPool, [...hookLines, ...verseOne]), hookLines)],
           ['Outro', outroLines],
         ]
       : style === 'hybrid'
