@@ -23,6 +23,8 @@ const bodySchema = z.object({
   requestCount: z.number().positive().optional(),
   operation: z.string().optional(),
   output: z.record(z.any()).optional(),
+  schema: z.record(z.any()).optional(),
+  temperature: z.number().min(0).max(2).optional(),
 })
 
 export async function POST(request: Request) {

@@ -1,4 +1,4 @@
-import { env } from './env'
+import { env, engineConfigured } from './env'
 
 async function fetchJson(url: string, init?: RequestInit) {
   const response = await fetch(url, {
@@ -15,6 +15,10 @@ async function fetchJson(url: string, init?: RequestInit) {
 }
 
 export async function createRoutingDecision(payload: Record<string, any>) {
+  if (!engineConfigured()) {
+    throw new Error('ECOBE engine is not configured. Set ECOBE_ENGINE_URL and ECOBE_ENGINE_INTERNAL_KEY.')
+  }
+
   try {
     return await fetchJson(`${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions`, {
       method: 'POST',
@@ -25,11 +29,19 @@ export async function createRoutingDecision(payload: Record<string, any>) {
       body: JSON.stringify(payload),
     })
   } catch (error) {
-    throw new Error(`Engine routing decision failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `Engine routing decision failed against ${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
   }
 }
 
 export async function executeAllocation(decisionId: string) {
+  if (!engineConfigured()) {
+    throw new Error('ECOBE engine is not configured. Set ECOBE_ENGINE_URL and ECOBE_ENGINE_INTERNAL_KEY.')
+  }
+
   try {
     return await fetchJson(`${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions/${decisionId}/execute`, {
       method: 'POST',
@@ -38,7 +50,11 @@ export async function executeAllocation(decisionId: string) {
       },
     })
   } catch (error) {
-    throw new Error(`Engine allocation failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `Engine allocation failed against ${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions/${decisionId}/execute: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
   }
 }
 

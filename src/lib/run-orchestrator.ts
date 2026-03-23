@@ -6,6 +6,7 @@ import { assertRunEntitlements } from './billing'
 import { evaluateSeked } from './seked'
 import { evaluateConvergeos } from './convergeos'
 import { createRoutingDecision, executeAllocation } from './engine'
+import { executeGovernedPayload } from './execution'
 
 type GovernanceSnapshot = {
   score: number
@@ -74,7 +75,7 @@ export async function orchestrateRun(apiKey: any, payload: Record<string, any>) 
       policyVersionId: policyVersion?.id,
       correlationId,
       status: seked.blocked ? 'blocked' : seked.requiresApproval ? 'approval_required' : 'pending',
-      inputPayload: (payload.input ?? payload) as any,
+      inputPayload: payload as any,
       blockedReason: seked.blockReason,
       approvalRequired: seked.requiresApproval,
     },
@@ -82,7 +83,7 @@ export async function orchestrateRun(apiKey: any, payload: Record<string, any>) 
 
   await createRunEvent(run.id, organizationId, 'run.received', {
     correlationId,
-    input: payload.input ?? payload,
+    input: payload,
   })
 
   if (seked.blocked) {
@@ -342,27 +343,94 @@ async function completeRunExecution(input: {
     },
   })
 
+  await createRunEvent(input.runId, input.organizationId, 'run.routed', {
+    provider: engineDecision.selectedProvider,
+    region: engineDecision.selectedRegion,
+    estimatedLatency: engineDecision.estimatedLatency,
+    estimatedCost: engineDecision.estimatedCost,
+    carbonEstimate: engineDecision.carbonEstimate,
+    decisionReason: engineDecision.decisionReason,
+    routeMode: engineDecision.routeMode ?? 'engine',
+    fallbackUsed: engineDecision.fallbackUsed ?? false,
+  })
+
   const allocation = await executeAllocation(engineDecision.decisionId)
+
+  await createRunEvent(input.runId, input.organizationId, 'run.allocated', {
+    executionReference: allocation.executionReference,
+    provider: allocation.provider ?? engineDecision.selectedProvider,
+    region: allocation.region ?? engineDecision.selectedRegion,
+    routeMode: allocation.routeMode ?? engineDecision.routeMode ?? 'engine',
+  })
+
+  const generation = await executeGovernedPayload({
+    input: input.payload.input,
+    schema: input.payload.schema,
+    temperature: input.payload.temperature,
+    operation: input.payload.operation,
+  })
+
+  const convergeos = {
+    attemptCount: Math.max(input.convergeos.attemptCount, generation.attemptCount),
+    schemaValid: generation.schemaValid,
+    qualityScore: generation.schemaValid
+      ? Math.max(input.convergeos.qualityScore, generation.qualityScore)
+      : Math.min(input.convergeos.qualityScore, generation.qualityScore),
+    finalDecision: generation.finalDecision,
+  }
+
+  if (!generation.schemaValid) {
+    const envelope = {
+      runId: input.runId,
+      status: 'failed',
+      result: null,
+      seked: {
+        score: input.seked.score,
+        drift: input.seked.drift,
+        fracture: input.seked.fracture,
+        tier: input.seked.tier,
+      },
+      convergeos,
+      ecobe: {
+        provider: engineDecision.selectedProvider,
+        region: engineDecision.selectedRegion,
+        estimatedLatency: engineDecision.estimatedLatency,
+        estimatedCost: engineDecision.estimatedCost,
+        carbonEstimate: engineDecision.carbonEstimate,
+        decisionReason: generation.error ?? engineDecision.decisionReason,
+        executionReference: allocation.executionReference,
+        executionProvider: generation.provider,
+        executionModel: generation.model,
+      },
+      auditId: input.runId,
+      error: generation.error ?? 'Governed generation failed schema validation',
+    }
+
+    await prisma.run.update({
+      where: { id: input.runId },
+      data: {
+        status: 'failed',
+        resultEnvelope: envelope as any,
+        auditId: input.runId,
+      },
+    })
+
+    await createRunEvent(input.runId, input.organizationId, 'run.failed', envelope)
+    await createAlert(input.organizationId, input.runId, 'high', envelope.error)
+    return envelope
+  }
 
   const envelope = {
     runId: input.runId,
     status: 'completed',
-    result: {
-      executionReference: allocation.executionReference,
-      output: input.payload.output ?? { accepted: true },
-    },
+    result: generation.output,
     seked: {
       score: input.seked.score,
       drift: input.seked.drift,
       fracture: input.seked.fracture,
       tier: input.seked.tier,
     },
-    convergeos: {
-      attemptCount: input.convergeos.attemptCount,
-      schemaValid: input.convergeos.schemaValid,
-      qualityScore: input.convergeos.qualityScore,
-      finalDecision: input.convergeos.finalDecision,
-    },
+    convergeos,
     ecobe: {
       provider: engineDecision.selectedProvider,
       region: engineDecision.selectedRegion,
@@ -370,6 +438,9 @@ async function completeRunExecution(input: {
       estimatedCost: engineDecision.estimatedCost,
       carbonEstimate: engineDecision.carbonEstimate,
       decisionReason: engineDecision.decisionReason,
+      executionReference: allocation.executionReference,
+      executionProvider: generation.provider,
+      executionModel: generation.model,
     },
     auditId: input.runId,
   }
