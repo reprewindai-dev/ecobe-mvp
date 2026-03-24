@@ -873,7 +873,12 @@ function buildStructureSkeletons(
     remix: ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
   }
 
-  const rankedVersePool = rankVerseCandidates(sharedVersePool, sharedHookPool, highlightBars)
+  const verseExpansionPool = buildVerseExpansionPool(sharedVersePool, sharedHookPool)
+  const rankedVersePool = rankVerseCandidates(
+    [...sharedVersePool, ...verseExpansionPool],
+    sharedHookPool,
+    highlightBars,
+  )
   const verseOneSeed = takeDistinctLines([highlightBars[0], ...rankedVersePool], verseLineCount, sharedHookPool)
   const verseTwoSeed = takeDistinctLines(
     [highlightBars[1], ...rankedVersePool.slice(verseLineCount), ...rankedVersePool],
@@ -1111,6 +1116,66 @@ function buildCompositePool(lines: string[], hookLines: string[] = []) {
     .map((entry) => entry.line)
 }
 
+function buildVerseExpansionPool(lines: string[], hookLines: string[]) {
+  const basePool = fuzzyUnique(lines).filter((line) => countWords(line) >= 4)
+  const expansions: Array<{ line: string; score: number }> = []
+
+  for (const line of basePool) {
+    for (const candidate of extractVerseFragments(line)) {
+      if (
+        !candidate ||
+        countWords(candidate) < 4 ||
+        containsNearDuplicate([...basePool, ...expansions.map((entry) => entry.line)], candidate)
+      ) {
+        continue
+      }
+      expansions.push({
+        line: candidate,
+        score: scoreVersePriority(candidate, hookLines, []) + scoreArrangementLine(candidate),
+      })
+    }
+  }
+
+  return expansions
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 10)
+    .map((entry) => entry.line)
+}
+
+function extractVerseFragments(line: string) {
+  const clauses = fuzzyUnique([
+    ...splitSourceClauses(line),
+    ...expandArrangementFragments(line),
+    ...sliceVerseFragments(line),
+  ])
+
+  return clauses
+    .map((candidate) => sanitizeLine(candidate))
+    .filter((candidate) => countWords(candidate) >= 4 && countWords(candidate) <= 12)
+    .filter((candidate, index, pool) => {
+      return !pool.some(
+        (other, otherIndex) =>
+          otherIndex !== index &&
+          other.length > candidate.length &&
+          other.toLowerCase().includes(candidate.toLowerCase()),
+      )
+    })
+}
+
+function sliceVerseFragments(line: string) {
+  const words = line.split(/\s+/).filter(Boolean)
+  if (words.length < 12) {
+    return []
+  }
+
+  const front = words.slice(0, Math.min(7, words.length)).join(' ')
+  const back = words.slice(Math.max(0, words.length - 7)).join(' ')
+  const middleStart = Math.max(0, Math.floor(words.length / 2) - 3)
+  const middle = words.slice(middleStart, Math.min(words.length, middleStart + 7)).join(' ')
+
+  return fuzzyUnique([front, middle, back])
+}
+
 function stitchSourceLines(primary?: string, secondary?: string) {
   if (!primary) {
     return secondary ?? null
@@ -1266,9 +1331,13 @@ function buildVariantLines(
   skeleton: StructureSkeleton,
   sourceLines: string[],
 ) {
-  const compositePool = buildCompositePool([...skeleton.verse_lines, ...sourceLines], skeleton.hook_lines)
+  const verseExpansionPool = buildVerseExpansionPool([...skeleton.verse_lines, ...sourceLines], skeleton.hook_lines)
+  const compositePool = buildCompositePool(
+    [...verseExpansionPool, ...skeleton.verse_lines, ...sourceLines],
+    skeleton.hook_lines,
+  )
   const verseFallbackPool = takeDistinctLines(
-    [...skeleton.verse_lines, ...compositePool, ...sourceLines],
+    [...verseExpansionPool, ...skeleton.verse_lines, ...compositePool, ...sourceLines],
     18,
     skeleton.hook_lines,
     4,
