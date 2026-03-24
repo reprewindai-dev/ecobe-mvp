@@ -859,9 +859,10 @@ function buildStructureSkeletons(
   const sharedVersePool = fuzzyUnique([
     ...extraction.highlightBars,
     ...extraction.verseCandidates,
+    ...extraction.discardCandidates,
     ...extraction.reusableLines,
     ...sourceLines,
-  ]).slice(0, 14)
+  ]).slice(0, 16)
   const highlightBars = fuzzyUnique([
     ...extraction.highlightBars,
     ...sharedHookPool,
