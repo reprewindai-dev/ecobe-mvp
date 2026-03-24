@@ -873,9 +873,10 @@ function buildStructureSkeletons(
     remix: ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
   }
 
-  const verseOneSeed = takeDistinctLines([highlightBars[0], ...sharedVersePool], verseLineCount, sharedHookPool)
+  const rankedVersePool = rankVerseCandidates(sharedVersePool, sharedHookPool, highlightBars)
+  const verseOneSeed = takeDistinctLines([highlightBars[0], ...rankedVersePool], verseLineCount, sharedHookPool)
   const verseTwoSeed = takeDistinctLines(
-    [highlightBars[1], ...sharedVersePool.slice(verseLineCount), ...sharedVersePool],
+    [highlightBars[1], ...rankedVersePool.slice(verseLineCount), ...rankedVersePool],
     verseLineCount,
     [...sharedHookPool, ...verseOneSeed],
   )
@@ -885,7 +886,7 @@ function buildStructureSkeletons(
       style: 'melodic',
       structure: structures.melodic ?? ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool, 3),
-      verse_lines: takeDistinctLines(sharedVersePool, 10),
+      verse_lines: takeDistinctLines(rankedVersePool, 10),
       verse_one_lines: verseOneSeed,
       verse_two_lines: verseTwoSeed,
       highlight_bars: highlightBars,
@@ -897,10 +898,10 @@ function buildStructureSkeletons(
       style: 'fast',
       structure: structures.fast ?? ['Verse 1', 'Hook', 'Verse 2', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool, 2),
-      verse_lines: takeDistinctLines(sharedVersePool, 12),
-      verse_one_lines: takeDistinctLines([highlightBars[0], ...sharedVersePool], verseLineCount + 1, sharedHookPool),
+      verse_lines: takeDistinctLines(rankedVersePool, 12),
+      verse_one_lines: takeDistinctLines([highlightBars[0], ...rankedVersePool], verseLineCount + 1, sharedHookPool),
       verse_two_lines: takeDistinctLines(
-        [highlightBars[1], ...sharedVersePool.slice(verseLineCount), ...sharedVersePool],
+        [highlightBars[1], ...rankedVersePool.slice(verseLineCount), ...rankedVersePool],
         verseLineCount + 1,
         [...sharedHookPool, ...verseOneSeed],
       ),
@@ -913,7 +914,7 @@ function buildStructureSkeletons(
       style: 'hybrid',
       structure: structures.hybrid ?? ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Bridge'],
       hook_lines: takeDistinctLines(sharedHookPool, 2),
-      verse_lines: takeDistinctLines(sharedVersePool, 10),
+      verse_lines: takeDistinctLines(rankedVersePool, 10),
       verse_one_lines: verseOneSeed,
       verse_two_lines: verseTwoSeed,
       highlight_bars: highlightBars,
@@ -925,10 +926,10 @@ function buildStructureSkeletons(
       style: 'remix',
       structure: structures.remix ?? ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool.slice().reverse(), 2),
-      verse_lines: takeDistinctLines([...sharedVersePool.slice().reverse(), ...sharedVersePool], 10),
-      verse_one_lines: takeDistinctLines([highlightBars[0], ...sharedVersePool.slice().reverse()], verseLineCount, sharedHookPool),
+      verse_lines: takeDistinctLines([...rankedVersePool.slice().reverse(), ...rankedVersePool], 10),
+      verse_one_lines: takeDistinctLines([highlightBars[0], ...rankedVersePool.slice().reverse()], verseLineCount, sharedHookPool),
       verse_two_lines: takeDistinctLines(
-        [highlightBars[1], ...sharedVersePool, ...sharedVersePool.slice().reverse()],
+        [highlightBars[1], ...rankedVersePool, ...rankedVersePool.slice().reverse()],
         verseLineCount,
         [...sharedHookPool, ...verseOneSeed],
       ),
@@ -984,6 +985,31 @@ function scoreSourceLineCandidate(line: string, pool: string[]): ScoredSourceLin
     compositeScore,
     highlightScore,
   }
+}
+
+function rankVerseCandidates(verseLines: string[], hookLines: string[], highlightBars: string[]) {
+  return fuzzyUnique(verseLines)
+    .map((line) => ({
+      line,
+      score: scoreVersePriority(line, hookLines, highlightBars),
+    }))
+    .sort((left, right) => right.score - left.score)
+    .map((entry) => entry.line)
+}
+
+function scoreVersePriority(line: string, hookLines: string[], highlightBars: string[]) {
+  const words = countWords(line)
+  const hookOverlap = hookLines.reduce(
+    (max, hookLine) => Math.max(max, similarity(stripSectionLabels(hookLine).toLowerCase(), stripSectionLabels(line).toLowerCase())),
+    0,
+  )
+  const highlightBoost = containsNearDuplicate(highlightBars, line) ? 2 : 0
+  const detailBoost = /broke|focused|whip|fit|city|thoughts|chest|pressure|shadow|rent|future|lesson|dream|legacy|motion/i.test(line) ? 2 : 0
+  const connectiveBoost = /\b(with|before|after|when|cause|still|used to|now|every|trying)\b/i.test(line) ? 2 : 0
+  const lengthBoost = words >= 5 && words <= 12 ? 4 : words >= 4 && words <= 14 ? 2 : 0
+  const hookPenalty = hookOverlap >= 0.9 ? 5 : hookOverlap >= 0.72 ? 3 : hookOverlap >= 0.58 ? 1 : 0
+
+  return lengthBoost + detailBoost + connectiveBoost + highlightBoost - hookPenalty
 }
 
 function containsNearDuplicate(values: string[], candidate: string) {
@@ -1056,24 +1082,33 @@ function balanceVerseSection(lines: string[], hookLines: string[]) {
   return balanced.length > 0 ? balanced : lines
 }
 
-function buildCompositePool(lines: string[]) {
+function buildCompositePool(lines: string[], hookLines: string[] = []) {
   const pool = fuzzyUnique(lines).filter((line) => countWords(line) >= 4)
-  const composites: string[] = []
+  const composites: Array<{ line: string; score: number }> = []
 
   for (let index = 0; index < pool.length; index += 1) {
     for (let offset = index + 1; offset < pool.length; offset += 1) {
       const composite = stitchSourceLines(pool[index], pool[offset])
-      if (!composite || containsNearDuplicate([...pool, ...composites], composite)) {
+      if (!composite || containsNearDuplicate([...pool, ...composites.map((entry) => entry.line)], composite)) {
         continue
       }
-      composites.push(composite)
-      if (composites.length >= 6) {
+      composites.push({
+        line: composite,
+        score: scoreVersePriority(composite, hookLines, []) + scoreArrangementLine(composite),
+      })
+      if (composites.length >= 12) {
         return composites
+          .sort((left, right) => right.score - left.score)
+          .slice(0, 8)
+          .map((entry) => entry.line)
       }
     }
   }
 
   return composites
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 8)
+    .map((entry) => entry.line)
 }
 
 function stitchSourceLines(primary?: string, secondary?: string) {
@@ -1092,10 +1127,18 @@ function stitchSourceLines(primary?: string, secondary?: string) {
   if (similarity(left.toLowerCase(), right.toLowerCase()) >= 0.72) {
     return left
   }
+  const leftLead = left.split(/\s+/).slice(0, 2).join(' ').toLowerCase()
+  const rightLead = right.split(/\s+/).slice(0, 2).join(' ').toLowerCase()
+  if (leftLead && leftLead === rightLead) {
+    return countWords(left) >= countWords(right) ? left : right
+  }
 
   const stitched = `${left}, ${right}`
   if (countWords(stitched) > 12) {
     return countWords(left) >= countWords(right) ? left : right
+  }
+  if (countWords(stitched) < 6) {
+    return null
   }
 
   return stitched
@@ -1223,7 +1266,7 @@ function buildVariantLines(
   skeleton: StructureSkeleton,
   sourceLines: string[],
 ) {
-  const compositePool = buildCompositePool([...skeleton.verse_lines, ...sourceLines])
+  const compositePool = buildCompositePool([...skeleton.verse_lines, ...sourceLines], skeleton.hook_lines)
   const verseFallbackPool = takeDistinctLines(
     [...skeleton.verse_lines, ...compositePool, ...sourceLines],
     18,
