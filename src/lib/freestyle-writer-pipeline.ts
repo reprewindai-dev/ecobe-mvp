@@ -1095,7 +1095,11 @@ function buildCompositePool(lines: string[], hookLines: string[] = []) {
   for (let index = 0; index < pool.length; index += 1) {
     for (let offset = index + 1; offset < pool.length; offset += 1) {
       const composite = stitchSourceLines(pool[index], pool[offset])
-      if (!composite || containsNearDuplicate([...pool, ...composites.map((entry) => entry.line)], composite)) {
+      if (
+        !composite ||
+        !isRecordableVerseLine(composite) ||
+        containsNearDuplicate([...pool, ...composites.map((entry) => entry.line)], composite)
+      ) {
         continue
       }
       composites.push({
@@ -1126,6 +1130,7 @@ function buildVerseExpansionPool(lines: string[], hookLines: string[]) {
       if (
         !candidate ||
         countWords(candidate) < 4 ||
+        !isRecordableVerseLine(candidate) ||
         containsNearDuplicate([...basePool, ...expansions.map((entry) => entry.line)], candidate)
       ) {
         continue
@@ -1153,6 +1158,7 @@ function extractVerseFragments(line: string) {
   return clauses
     .map((candidate) => sanitizeLine(candidate))
     .filter((candidate) => countWords(candidate) >= 4 && countWords(candidate) <= 12)
+    .filter((candidate) => isRecordableVerseLine(candidate))
     .filter((candidate, index, pool) => {
       return !pool.some(
         (other, otherIndex) =>
@@ -1354,20 +1360,21 @@ function buildVariantLines(
     [],
     4,
   )
-  const verseOne = balanceVerseSection(ensureVerseHighlight(
+  const verseTarget = Math.min(5, skeleton.minimum_unique_verse_lines + (style === 'fast' ? 1 : 0))
+  const verseOne = balanceVerseSection(ensureVerseDensity(ensureVerseHighlight(
     skeleton.verse_one_lines,
     skeleton.highlight_bars[0] ?? hookLines[0] ?? sourceLines[0],
     skeleton.minimum_unique_verse_lines,
     verseFallbackPool,
     [...hookLines],
-  ), hookLines)
-  const verseTwo = balanceVerseSection(ensureVerseHighlight(
+  ), verseTarget, verseFallbackPool, hookLines), hookLines)
+  const verseTwo = balanceVerseSection(ensureVerseDensity(ensureVerseHighlight(
     skeleton.verse_two_lines,
     skeleton.highlight_bars[1] ?? skeleton.highlight_bars[0] ?? hookLines[0] ?? sourceLines[0],
     skeleton.minimum_unique_verse_lines,
     [...verseFallbackPool.slice().reverse(), ...verseFallbackPool],
     [...hookLines, ...verseOne],
-  ), hookLines)
+  ), verseTarget, verseFallbackPool, [...hookLines, ...verseOne]), hookLines)
   const preHookLines = takeDistinctLines(
     [
       ...skeleton.highlight_bars,
@@ -1397,45 +1404,91 @@ function buildVariantLines(
     4,
   )
 
-  const sections: Array<[string, string[]]> = style === 'melodic'
-    ? [
-        ['Hook', hookLines],
-        ['Verse 1', verseOne],
-        ['Pre-Hook', preHookLines],
-        ['Hook', hookLines],
-        ['Verse 2', verseTwo],
-        ['Outro', outroLines],
-      ]
-    : style === 'fast'
-      ? [
-          ['Verse 1', balanceVerseSection(ensureVerseDensity(verseOne, skeleton.minimum_unique_verse_lines + 1, verseFallbackPool, hookLines), hookLines)],
-          ['Hook', hookLines],
-          ['Verse 2', balanceVerseSection(ensureVerseDensity(verseTwo, skeleton.minimum_unique_verse_lines + 1, verseFallbackPool, [...hookLines, ...verseOne]), hookLines)],
-          ['Hook', hookLines],
-          ['Outro', outroLines],
-        ]
-      : style === 'hybrid'
-        ? [
-            ['Hook', hookLines],
-            ['Verse 1', verseOne],
-            ['Pre-Hook', preHookLines],
-            ['Hook', hookLines],
-            ['Verse 2', verseTwo],
-            ['Bridge', bridgeLines],
-            ['Outro', outroLines],
-          ]
-        : [
-            ['Verse 1', verseOne],
-            ['Hook', hookLines],
-            ['Verse 2', verseTwo],
-            ['Bridge', bridgeLines],
-            ['Hook', hookLines],
-            ['Outro', outroLines],
-          ]
+  const sectionPools = {
+    Hook: hookLines,
+    'Verse 1': verseOne,
+    'Verse 2': verseTwo,
+    'Pre-Hook': preHookLines,
+    Bridge: bridgeLines,
+    Outro: outroLines,
+  } as const
+  const sectionTargets = planSectionTargets(skeleton, sectionPools)
 
-  return sections
-    .flatMap(([label, sectionLines]) => sectionLines.map((line) => `${label}: ${sanitizeLine(line)}`))
+  return skeleton.structure
+    .flatMap((label) => {
+      const pool = sectionPools[label as keyof typeof sectionPools] ?? []
+      const target = sectionTargets[label] ?? pool.length
+      return pool.slice(0, target).map((line) => `${label}: ${sanitizeLine(line)}`)
+    })
     .filter(Boolean)
+}
+
+function planSectionTargets(
+  skeleton: StructureSkeleton,
+  sectionPools: {
+    Hook: string[]
+    'Verse 1': string[]
+    'Verse 2': string[]
+    'Pre-Hook': string[]
+    Bridge: string[]
+    Outro: string[]
+  },
+) {
+  const sectionOccurrences = new Map<string, number>()
+  for (const label of skeleton.structure) {
+    sectionOccurrences.set(label, (sectionOccurrences.get(label) ?? 0) + 1)
+  }
+
+  const targets = new Map<string, number>([
+    ['Hook', Math.min(sectionPools.Hook.length, sectionPools.Hook.length >= 3 && sectionOccurrences.get('Hook') === 1 ? 3 : 2)],
+    ['Verse 1', Math.min(sectionPools['Verse 1'].length, Math.max(skeleton.minimum_unique_verse_lines, sectionPools['Verse 1'].length))],
+    ['Verse 2', Math.min(sectionPools['Verse 2'].length, Math.max(skeleton.minimum_unique_verse_lines, sectionPools['Verse 2'].length))],
+    ['Pre-Hook', Math.min(sectionPools['Pre-Hook'].length, 2)],
+    ['Bridge', Math.min(sectionPools.Bridge.length, 2)],
+    ['Outro', Math.min(sectionPools.Outro.length, 1)],
+  ])
+
+  const minimums = new Map<string, number>([
+    ['Hook', sectionOccurrences.get('Hook') ? 2 : 0],
+    ['Verse 1', sectionOccurrences.get('Verse 1') ? skeleton.minimum_unique_verse_lines : 0],
+    ['Verse 2', sectionOccurrences.get('Verse 2') ? skeleton.minimum_unique_verse_lines : 0],
+    ['Pre-Hook', sectionOccurrences.get('Pre-Hook') ? 1 : 0],
+    ['Bridge', sectionOccurrences.get('Bridge') ? 1 : 0],
+    ['Outro', sectionOccurrences.get('Outro') ? 1 : 0],
+  ])
+
+  const totalLines = () =>
+    Array.from(sectionOccurrences.entries()).reduce(
+      (sum, [label, count]) => sum + (targets.get(label) ?? 0) * count,
+      0,
+    )
+
+  const shrinkOrder = ['Pre-Hook', 'Bridge', 'Verse 2', 'Verse 1', 'Hook']
+  const growOrder = ['Verse 1', 'Verse 2', 'Bridge', 'Pre-Hook', 'Hook']
+  const [, maximum] = skeleton.target_line_range
+  const [minimum] = skeleton.target_line_range
+
+  while (totalLines() > maximum) {
+    const candidate = shrinkOrder.find((label) => (targets.get(label) ?? 0) > (minimums.get(label) ?? 0))
+    if (!candidate) {
+      break
+    }
+    targets.set(candidate, Math.max(minimums.get(candidate) ?? 0, (targets.get(candidate) ?? 0) - 1))
+  }
+
+  while (totalLines() < minimum) {
+    const candidate = growOrder.find((label) => {
+      const current = targets.get(label) ?? 0
+      const poolLimit = sectionPools[label as keyof typeof sectionPools]?.length ?? 0
+      return current < poolLimit
+    })
+    if (!candidate) {
+      break
+    }
+    targets.set(candidate, (targets.get(candidate) ?? 0) + 1)
+  }
+
+  return Object.fromEntries(targets.entries())
 }
 
 function sanitizeLine(line: string) {
@@ -1484,8 +1537,29 @@ function isUsableFragment(line: string) {
 
   return (
     !/^(to|into|with|and|but|before|after|while|trying)$/i.test(firstWord) &&
-    !/^(to|into|with|and|but|before|after|while|trying|make|turn)$/i.test(lastWord)
+    !/^(to|into|with|and|but|before|after|while|trying|make|turn|when|had|hold)$/i.test(lastWord)
   )
+}
+
+function isRecordableVerseLine(line: string) {
+  const sanitized = sanitizeLine(line)
+  const words = sanitized.split(/\s+/).filter(Boolean)
+  const firstWord = words[0]?.toLowerCase() ?? ''
+  const lastWord = words.at(-1)?.toLowerCase() ?? ''
+
+  if (words.length < 4 || words.length > 12) {
+    return false
+  }
+
+  if (/^(and|but|with|to|into|while|because|cause)$/i.test(firstWord)) {
+    return false
+  }
+
+  if (/^(to|into|with|and|but|before|after|while|trying|make|turn|when|had|hold)$/i.test(lastWord)) {
+    return false
+  }
+
+  return /[aeiouy]/i.test(lastWord)
 }
 
 function scoreArrangementLine(line: string) {
