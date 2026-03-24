@@ -337,10 +337,10 @@ function buildGenerationTask(input: {
   previousError: string | null
 }) {
   const structures = input.policy?.preferredStructures ?? {
-    melodic: ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Outro'],
-    fast: ['Verse 1', 'Hook', 'Verse 2', 'Outro'],
-    hybrid: ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Bridge'],
-    remix: ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+    melodic: ['Hook', 'Verse 1', 'Pre-Hook', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+    fast: ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+    hybrid: ['Hook', 'Verse 1', 'Pre-Hook', 'Hook', 'Verse 2', 'Bridge', 'Outro'],
+    remix: ['Verse 1', 'Hook', 'Verse 2', 'Bridge', 'Hook', 'Outro'],
   }
   const skeletons = buildStructureSkeletons(input.extraction, input.transcript, structures)
 
@@ -377,6 +377,7 @@ function buildGenerationTask(input: {
     '- Highlight bars must appear unchanged in hook openings, verse openings, or verse closers',
     '- Rich transcripts should land in the 10 to 16 line range per version',
     '- versions must not be near-duplicates of each other',
+    '- Use modern section labels where they fit: Verse 1, Pre-Hook, Hook, Verse 2, Bridge, Outro',
     '- Return readable line-broken lyrics, never paragraphs',
     '',
     'Structure:',
@@ -867,10 +868,10 @@ function buildStructureSkeletons(
     ...sharedVersePool,
   ]).slice(0, 2)
   const structures = preferredStructures ?? {
-    melodic: ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Outro'],
-    fast: ['Verse 1', 'Hook', 'Verse 2', 'Outro'],
-    hybrid: ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Bridge'],
-    remix: ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+    melodic: ['Hook', 'Verse 1', 'Pre-Hook', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+    fast: ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+    hybrid: ['Hook', 'Verse 1', 'Pre-Hook', 'Hook', 'Verse 2', 'Bridge', 'Outro'],
+    remix: ['Verse 1', 'Hook', 'Verse 2', 'Bridge', 'Hook', 'Outro'],
   }
 
   const verseExpansionPool = buildVerseExpansionPool(sharedVersePool, sharedHookPool)
@@ -889,7 +890,7 @@ function buildStructureSkeletons(
   return {
     melodic: {
       style: 'melodic',
-      structure: structures.melodic ?? ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Outro'],
+      structure: structures.melodic ?? ['Hook', 'Verse 1', 'Pre-Hook', 'Hook', 'Verse 2', 'Hook', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool, 3),
       verse_lines: takeDistinctLines(rankedVersePool, 10),
       verse_one_lines: verseOneSeed,
@@ -901,7 +902,7 @@ function buildStructureSkeletons(
     },
     fast: {
       style: 'fast',
-      structure: structures.fast ?? ['Verse 1', 'Hook', 'Verse 2', 'Outro'],
+      structure: structures.fast ?? ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool, 2),
       verse_lines: takeDistinctLines(rankedVersePool, 12),
       verse_one_lines: takeDistinctLines([highlightBars[0], ...rankedVersePool], verseLineCount + 1, sharedHookPool),
@@ -917,7 +918,7 @@ function buildStructureSkeletons(
     },
     hybrid: {
       style: 'hybrid',
-      structure: structures.hybrid ?? ['Hook', 'Verse 1', 'Hook', 'Verse 2', 'Bridge'],
+      structure: structures.hybrid ?? ['Hook', 'Verse 1', 'Pre-Hook', 'Hook', 'Verse 2', 'Bridge', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool, 2),
       verse_lines: takeDistinctLines(rankedVersePool, 10),
       verse_one_lines: verseOneSeed,
@@ -929,7 +930,7 @@ function buildStructureSkeletons(
     },
     remix: {
       style: 'remix',
-      structure: structures.remix ?? ['Verse 1', 'Hook', 'Verse 2', 'Hook', 'Outro'],
+      structure: structures.remix ?? ['Verse 1', 'Hook', 'Verse 2', 'Bridge', 'Hook', 'Outro'],
       hook_lines: takeDistinctLines(sharedHookPool.slice().reverse(), 2),
       verse_lines: takeDistinctLines([...rankedVersePool.slice().reverse(), ...rankedVersePool], 10),
       verse_one_lines: takeDistinctLines([highlightBars[0], ...rankedVersePool.slice().reverse()], verseLineCount, sharedHookPool),
@@ -1349,7 +1350,7 @@ function buildVariantLines(
       ...sourceLines,
       ...compositePool,
     ],
-    style === 'melodic' ? 3 : 2,
+    2,
     [],
     4,
   )
@@ -1367,16 +1368,32 @@ function buildVariantLines(
     [...verseFallbackPool.slice().reverse(), ...verseFallbackPool],
     [...hookLines, ...verseOne],
   ), hookLines)
-  const outroLines = takeDistinctLines(
+  const preHookLines = takeDistinctLines(
     [
-      skeleton.highlight_bars[1],
+      ...skeleton.highlight_bars,
+      ...compositePool,
+      ...verseExpansionPool,
+      ...sourceLines,
+    ],
+    2,
+    [...hookLines, ...verseOne, ...verseTwo],
+    4,
+  )
+  const bridgeLines = takeDistinctLines(
+    [
       ...compositePool.slice().reverse(),
+      ...verseExpansionPool.slice().reverse(),
       ...sourceLines.slice().reverse(),
       ...skeleton.verse_lines.slice().reverse(),
-      ...hookLines,
     ],
-    style === 'melodic' || style === 'hybrid' ? 2 : 1,
+    2,
     [...hookLines, ...verseOne, ...verseTwo],
+    4,
+  )
+  const outroLines = takeDistinctLines(
+    [...bridgeLines.slice().reverse(), ...preHookLines.slice().reverse(), ...sourceLines.slice().reverse()],
+    1,
+    [...hookLines, ...verseOne, ...verseTwo, ...bridgeLines],
     4,
   )
 
@@ -1384,6 +1401,7 @@ function buildVariantLines(
     ? [
         ['Hook', hookLines],
         ['Verse 1', verseOne],
+        ['Pre-Hook', preHookLines],
         ['Hook', hookLines],
         ['Verse 2', verseTwo],
         ['Outro', outroLines],
@@ -1393,20 +1411,24 @@ function buildVariantLines(
           ['Verse 1', balanceVerseSection(ensureVerseDensity(verseOne, skeleton.minimum_unique_verse_lines + 1, verseFallbackPool, hookLines), hookLines)],
           ['Hook', hookLines],
           ['Verse 2', balanceVerseSection(ensureVerseDensity(verseTwo, skeleton.minimum_unique_verse_lines + 1, verseFallbackPool, [...hookLines, ...verseOne]), hookLines)],
+          ['Hook', hookLines],
           ['Outro', outroLines],
         ]
       : style === 'hybrid'
         ? [
             ['Hook', hookLines],
             ['Verse 1', verseOne],
+            ['Pre-Hook', preHookLines],
             ['Hook', hookLines],
             ['Verse 2', verseTwo],
-            ['Bridge', outroLines],
+            ['Bridge', bridgeLines],
+            ['Outro', outroLines],
           ]
         : [
             ['Verse 1', verseOne],
             ['Hook', hookLines],
             ['Verse 2', verseTwo],
+            ['Bridge', bridgeLines],
             ['Hook', hookLines],
             ['Outro', outroLines],
           ]
