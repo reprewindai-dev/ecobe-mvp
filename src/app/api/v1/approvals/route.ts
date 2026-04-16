@@ -1,6 +1,10 @@
 import { assertOrganizationAccess, requireScopedAccess } from '@/lib/auth'
 import { badRequest, forbidden, json } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
+import { PublicRunResponseSchema } from '@/modules/runs/contracts/public-run-response.schema'
+import { mapInternalRunResultToPublicCandidate, mapRunRecordToInternalEnvelope } from '@/modules/runs/mappers/map-internal-run-result-to-public'
+import { serializePublicRunResponse } from '@/modules/runs/exposure/serialize-public-run-response'
+import { resolveExposureTier } from '@/modules/runs/services/resolve-exposure-tier'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,18 +40,42 @@ export async function GET(request: Request) {
     },
     orderBy: { createdAt: 'desc' },
     include: {
-      run: {
-        select: {
-          id: true,
-          status: true,
-          blockedReason: true,
-          createdAt: true,
-          updatedAt: true,
-          correlationId: true,
-        },
-      },
+      run: true,
     },
   })
 
-  return json({ data: approvals })
+  const tierCache = new Map<string, Awaited<ReturnType<typeof resolveExposureTier>>>()
+  const data = await Promise.all(
+    approvals.map(async (approval) => {
+      if (!approval.run) {
+        return approval
+      }
+
+      let tier = tierCache.get(approval.organizationId)
+      if (!tier) {
+        tier = await resolveExposureTier({
+          organizationId: approval.organizationId,
+          isInternalAdmin: access.isPlatformAdmin,
+        })
+        tierCache.set(approval.organizationId, tier)
+      }
+
+      const serializedRun = PublicRunResponseSchema.parse(
+        serializePublicRunResponse(
+          mapInternalRunResultToPublicCandidate(mapRunRecordToInternalEnvelope(approval.run)),
+          {
+            tier,
+            isInternalAdmin: access.isPlatformAdmin,
+          }
+        )
+      )
+
+      return {
+        ...approval,
+        run: serializedRun,
+      }
+    })
+  )
+
+  return json({ data })
 }

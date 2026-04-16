@@ -19,11 +19,11 @@ const dbBaseUrl = `postgresql://postgres:postgres@127.0.0.1:${postgresPort}/${da
 const mvpDbUrl = `${dbBaseUrl}?schema=mvp`
 const engineDbUrl = `${dbBaseUrl}?schema=engine`
 const logDir = path.join(mvpRoot, '.local', 'logs')
-const postgresDir = path.join(mvpRoot, '.local', 'postgres')
+const postgresDir = path.join(mvpRoot, '.local', 'postgres', String(Date.now()))
 
 async function main() {
   fs.mkdirSync(logDir, { recursive: true })
-  fs.rmSync(postgresDir, { recursive: true, force: true })
+  fs.mkdirSync(path.dirname(postgresDir), { recursive: true })
 
   const pg = new EmbeddedPostgres({
     databaseDir: postgresDir,
@@ -219,6 +219,10 @@ async function terminateProcess(child) {
     return
   }
 
+  if (child.exitCode !== null) {
+    return
+  }
+
   if (process.platform === 'win32') {
     await new Promise((resolve) => {
       const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
@@ -227,12 +231,18 @@ async function terminateProcess(child) {
       killer.on('exit', () => resolve())
       killer.on('error', () => resolve())
     })
-    await once(child, 'exit').catch(() => undefined)
+    await Promise.race([
+      once(child, 'exit'),
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]).catch(() => undefined)
     return
   }
 
   child.kill('SIGTERM')
-  await once(child, 'exit').catch(() => undefined)
+  await Promise.race([
+    once(child, 'exit'),
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]).catch(() => undefined)
 }
 
 await main()

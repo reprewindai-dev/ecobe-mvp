@@ -4,6 +4,8 @@ import { assertOrganizationAccess, requireScopedAccess } from '@/lib/auth'
 import { badRequest, forbidden, json } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
 import { generateAuditExport } from '@/lib/reporting'
+import { resolveExposureTier } from '@/modules/runs/services/resolve-exposure-tier'
+import { sanitizeAuditExportRecord } from '@/modules/runs/services/sanitize-audit-export'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,7 +52,15 @@ export async function GET(request: Request) {
     orderBy: { createdAt: 'desc' },
   })
 
-  return json({ data: auditExports })
+  const tier = await resolveExposureTier({
+    organizationId: organization.id,
+    isInternalAdmin: access.isPlatformAdmin,
+  })
+  const data = auditExports.map((entry) =>
+    sanitizeAuditExportRecord(entry, { tier, isInternalAdmin: access.isPlatformAdmin })
+  )
+
+  return json({ data })
 }
 
 export async function POST(request: Request) {
@@ -85,5 +95,14 @@ export async function POST(request: Request) {
     periodEnd: parsed.data.periodEnd ? new Date(parsed.data.periodEnd) : undefined,
   })
 
-  return json(auditExport, { status: 201 })
+  const tier = await resolveExposureTier({
+    organizationId: organization.id,
+    isInternalAdmin: access.isPlatformAdmin,
+  })
+  const response = sanitizeAuditExportRecord(auditExport, {
+    tier,
+    isInternalAdmin: access.isPlatformAdmin,
+  })
+
+  return json(response, { status: 201 })
 }

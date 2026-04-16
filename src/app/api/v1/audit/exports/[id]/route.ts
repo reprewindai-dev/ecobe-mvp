@@ -1,6 +1,8 @@
 import { assertOrganizationAccess, requireScopedAccess } from '@/lib/auth'
 import { forbidden, json, notFound } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
+import { resolveExposureTier } from '@/modules/runs/services/resolve-exposure-tier'
+import { sanitizeAuditExportRecord } from '@/modules/runs/services/sanitize-audit-export'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,5 +25,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return forbidden()
   }
 
-  return json(auditExport)
+  const tier = await resolveExposureTier({
+    organizationId: auditExport.organizationId,
+    isInternalAdmin: access.isPlatformAdmin,
+  })
+  const response = sanitizeAuditExportRecord(auditExport, {
+    tier,
+    isInternalAdmin: access.isPlatformAdmin,
+  })
+
+  return json(response)
 }

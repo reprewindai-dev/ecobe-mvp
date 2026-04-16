@@ -203,6 +203,8 @@ export async function POST(request: Request) {
                   'keys:write',
                   'policies:read',
                   'policies:write',
+                  'runs:read',
+                  'runs:write',
                   'webhooks:read',
                   'webhooks:write',
                 ],

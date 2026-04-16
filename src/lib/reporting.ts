@@ -1,6 +1,12 @@
 import { createHash } from 'crypto'
 
 import { prisma } from './prisma'
+import { mapInternalRunEventToPublicCandidate } from '@/modules/runs/mappers/map-internal-run-event-to-public'
+import { mapInternalRunResultToPublicCandidate, mapRunRecordToInternalEnvelope } from '@/modules/runs/mappers/map-internal-run-result-to-public'
+import { serializePublicRunEvents } from '@/modules/runs/exposure/serialize-public-run-events'
+import { serializePublicRunResponse } from '@/modules/runs/exposure/serialize-public-run-response'
+import { serializeRunExportRows } from '@/modules/runs/exposure/serialize-run-export'
+import { resolveExposureTier } from '@/modules/runs/services/resolve-exposure-tier'
 
 type ReportingWindow = {
   periodStart?: Date
@@ -104,6 +110,7 @@ export async function generateAuditExport(input: AuditExportInput) {
           orderBy: { createdAt: 'asc' },
           select: {
             id: true,
+            runId: true,
             eventType: true,
             payload: true,
             signature: true,
@@ -184,6 +191,33 @@ export async function generateAuditExport(input: AuditExportInput) {
     0
   )
 
+  const tier = await resolveExposureTier({
+    organizationId: input.organizationId,
+    isInternalAdmin: false,
+  })
+  const exposureContext = { tier, isInternalAdmin: false as const }
+
+  const mappedRuns = runs.map((run) => {
+    const publicRun = serializePublicRunResponse(
+      mapInternalRunResultToPublicCandidate(mapRunRecordToInternalEnvelope(run)),
+      exposureContext
+    )
+    const publicEvents = serializePublicRunEvents(
+      run.events.map((event) => mapInternalRunEventToPublicCandidate(event)),
+      exposureContext
+    )
+
+    return {
+      run: publicRun,
+      project: run.project,
+      environment: run.environment,
+      events: publicEvents,
+      usageRecords: run.usageRecords,
+      approvalRequest: run.approvalRequest,
+      alerts: run.alerts,
+    }
+  })
+
   const artifact = {
     generatedAt: new Date().toISOString(),
     organization,
@@ -199,7 +233,7 @@ export async function generateAuditExport(input: AuditExportInput) {
       totalUsageUsd: Number(totalUsageUsd.toFixed(2)),
     },
     activePolicies,
-    runs,
+    runs: serializeRunExportRows(mappedRuns, exposureContext),
   }
 
   const checksum = checksumFor(artifact)

@@ -1,6 +1,8 @@
 import { assertOrganizationAccess, requireScopedAccess } from '@/lib/auth'
 import { badRequest, forbidden, json } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
+import { serializeRunExportRows } from '@/modules/runs/exposure/serialize-run-export'
+import { resolveExposureTier } from '@/modules/runs/services/resolve-exposure-tier'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,5 +54,26 @@ export async function GET(request: Request) {
     },
   })
 
-  return json({ data: deliveries })
+  if (access.isPlatformAdmin && !organization) {
+    return json({ data: deliveries })
+  }
+
+  const organizationId = organization?.id ?? access.organizationId ?? ''
+  if (!organizationId) {
+    return badRequest('organizationSlug is required for platform admin filtering')
+  }
+  const tier = await resolveExposureTier({
+    organizationId,
+    isInternalAdmin: access.isPlatformAdmin,
+  })
+
+  const data = deliveries.map((entry) => ({
+    ...entry,
+    responseBody: serializeRunExportRows(entry.responseBody, {
+      tier,
+      isInternalAdmin: access.isPlatformAdmin,
+    }),
+  }))
+
+  return json({ data })
 }

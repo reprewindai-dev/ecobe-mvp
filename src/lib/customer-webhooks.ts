@@ -2,6 +2,9 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes }
 
 import { env } from './env'
 import { prisma } from './prisma'
+import { mapInternalRunEventToPublicCandidate } from '@/modules/runs/mappers/map-internal-run-event-to-public'
+import { serializeWebhookRunEvent } from '@/modules/runs/exposure/serialize-webhook-run-event'
+import { resolveExposureTier } from '@/modules/runs/services/resolve-exposure-tier'
 
 type OutboundRunEvent = {
   id: string
@@ -56,6 +59,25 @@ export function decryptWebhookSecret(encryptedSecret: string) {
 }
 
 export async function dispatchRunEventWebhooks(event: OutboundRunEvent) {
+  const tier = await resolveExposureTier({
+    organizationId: event.organizationId,
+    isInternalAdmin: false,
+  })
+  const serializedEvent = serializeWebhookRunEvent(
+    mapInternalRunEventToPublicCandidate({
+      id: event.id,
+      runId: event.runId,
+      eventType: event.eventType,
+      payload: event.payload,
+      signature: event.signature,
+      createdAt: event.createdAt,
+    }),
+    {
+      tier,
+      isInternalAdmin: false,
+    }
+  )
+
   const endpoints = await prisma.webhookEndpoint.findMany({
     where: {
       organizationId: event.organizationId,
@@ -78,7 +100,7 @@ export async function dispatchRunEventWebhooks(event: OutboundRunEvent) {
     organizationId: event.organizationId,
     runId: event.runId,
     createdAt: event.createdAt.toISOString(),
-    payload: event.payload,
+    payload: serializedEvent,
     auditSignature: event.signature,
   }
 
