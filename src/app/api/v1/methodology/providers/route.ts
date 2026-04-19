@@ -1,0 +1,83 @@
+import { NextResponse } from 'next/server'
+
+import { env, engineConfigured } from '@/lib/env'
+
+export const dynamic = 'force-dynamic'
+
+type EngineHealthResponse = {
+  timestamp?: string
+  providers?: Record<string, boolean>
+}
+
+function formatProviderName(key: string) {
+  const aliases: Record<string, string> = {
+    watttime: 'WattTime',
+    gridstatus: 'GridStatus',
+    eia930: 'EIA-930',
+    ember: 'Ember',
+    gbCarbon: 'GB Carbon',
+    dkCarbon: 'DK Carbon',
+    fiCarbon: 'FI Carbon',
+    static: 'Static Baseline',
+    fingrid: 'Fingrid',
+  }
+
+  return aliases[key] ?? key
+}
+
+export async function GET() {
+  if (!engineConfigured()) {
+    return NextResponse.json(
+      { error: 'ECOBE engine broker is not configured.' },
+      { status: 503 },
+    )
+  }
+
+  const headers = new Headers({
+    accept: 'application/json',
+    authorization: `Bearer ${env.ECOBE_ENGINE_INTERNAL_KEY}`,
+    'x-ecobe-internal-key': env.ECOBE_ENGINE_INTERNAL_KEY,
+    'x-api-key': env.ECOBE_ENGINE_INTERNAL_KEY,
+  })
+
+  try {
+    const response = await fetch(`${env.ECOBE_ENGINE_URL}/health`, {
+      headers,
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: `Engine health unavailable (${response.status})` },
+        { status: response.status },
+      )
+    }
+
+    const health = (await response.json()) as EngineHealthResponse
+    const providers = Object.entries(health.providers ?? {}).map(([key, ready]) => ({
+      name: formatProviderName(key),
+      status: ready ? 'healthy' : 'offline',
+      latencyMs: null,
+      lastSuccessAt: ready ? health.timestamp ?? null : null,
+      disagreementPct: null,
+      computed: key === 'static',
+    }))
+
+    return NextResponse.json(
+      {
+        providers,
+      },
+      {
+        headers: {
+          'x-ecobe-broker': 'ecobe-mvp',
+          'x-ecobe-upstream': 'engine-health-derived',
+        },
+      },
+    )
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Provider methodology unavailable' },
+      { status: 502 },
+    )
+  }
+}

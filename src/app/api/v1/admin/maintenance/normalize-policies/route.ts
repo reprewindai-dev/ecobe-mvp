@@ -44,15 +44,17 @@ export async function POST(request: Request) {
     orderBy: [{ createdAt: 'desc' }],
   })
 
+  const activePolicies = remaining.map((version: (typeof remaining)[number]) => ({
+    id: version.id,
+    policyProfileId: version.policyProfileId,
+    name: version.policyProfile.name,
+    organizationId: version.policyProfile.organizationId,
+    projectId: version.policyProfile.projectId,
+    version: version.version,
+  }))
+
   return json({
     deactivatedCount: deactivate.length,
-    activePolicies: remaining.map((version) => ({
-      id: version.id,
-      policyProfileId: version.policyProfileId,
-      name: version.policyProfile.name,
-      organizationId: version.policyProfile.organizationId,
-      projectId: version.policyProfile.projectId,
-      version: version.version,
-    })),
+    activePolicies,
   })
 }
