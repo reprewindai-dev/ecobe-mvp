@@ -18,9 +18,13 @@ export function corsHeaders(init?: HeadersInit) {
 }
 
 export function json(data: unknown, init?: ResponseInit) {
-  return Response.json(data, {
+  const headers = corsHeaders(init?.headers)
+  if (!headers.has('content-type')) {
+    headers.set('content-type', 'application/json; charset=utf-8')
+  }
+  return new Response(JSON.stringify(data), {
     ...init,
-    headers: corsHeaders(init?.headers),
+    headers,
   })
 }
 
