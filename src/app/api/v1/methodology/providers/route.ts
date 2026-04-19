@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { json } from '@/lib/http'
 
 import { env, engineConfigured } from '@/lib/env'
 
@@ -27,7 +27,7 @@ function formatProviderName(key: string) {
 
 export async function GET() {
   if (!engineConfigured()) {
-    return NextResponse.json(
+    return json(
       { error: 'ECOBE engine broker is not configured.' },
       { status: 503 },
     )
@@ -41,13 +41,13 @@ export async function GET() {
   })
 
   try {
-    const response = await fetch(`${env.ECOBE_ENGINE_URL}/health`, {
+    const response = await fetch(`${env.ECOBE_ENGINE_URL}/api/v1/health`, {
       headers,
       cache: 'no-store',
     })
 
     if (!response.ok) {
-      return NextResponse.json(
+      return json(
         { error: `Engine health unavailable (${response.status})` },
         { status: response.status },
       )
@@ -63,7 +63,7 @@ export async function GET() {
       computed: key === 'static',
     }))
 
-    return NextResponse.json(
+    return json(
       {
         providers,
       },
@@ -75,8 +75,10 @@ export async function GET() {
       },
     )
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Provider methodology unavailable' },
+    return json(
+      {
+        error: error instanceof Error ? error.message : 'Provider methodology unavailable',
+      },
       { status: 502 },
     )
   }
