@@ -1,0 +1,33 @@
+{
+  "headers": [
+    {
+      "source": "/api/v1/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, X-Requested-With, X-ECOBE-Internal-Key, X-ECOBE-Signature, X-Request-Id, X-API-Key, Accept"
+        },
+        {
+          "key": "Access-Control-Expose-Headers",
+          "value": "x-ecobe-broker, x-ecobe-upstream"
+        },
+        {
+          "key": "Vary",
+          "value": "Origin"
+        },
+        {
+          "key": "Access-Control-Max-Age",
+          "value": "86400"
+        }
+      ]
+    }
+  ]
+}
