@@ -2,6 +2,7 @@ import crypto from 'crypto'
 
 import { NextResponse } from 'next/server'
 
+import { corsHeaders } from '@/lib/http'
 import { env, engineConfigured } from '@/lib/env'
 
 const FORWARDED_HEADERS = ['accept', 'content-type', 'authorization', 'x-request-id', 'x-ecobe-signature'] as const
@@ -52,7 +53,7 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
       {
         error: 'Broker target is not configured. Set ECOBE_ENGINE_URL.',
       },
-      { status: 503 },
+      { status: 503, headers: corsHeaders() },
     )
   }
 
@@ -108,13 +109,13 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
       {
         error: error instanceof Error ? error.message : 'Upstream broker request failed',
       },
-      { status: 502 },
+      { status: 502, headers: corsHeaders() },
     )
   } finally {
     clearTimeout(timeout)
   }
 
-  const responseHeaders = new Headers(upstream.headers)
+  const responseHeaders = corsHeaders(upstream.headers)
   for (const header of HOP_BY_HOP_HEADERS) {
     responseHeaders.delete(header)
   }
@@ -125,6 +126,13 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
   return new NextResponse(responseBody, {
     status: upstream.status,
     headers: responseHeaders,
+  })
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders(),
   })
 }
 
