@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 import { corsHeaders } from '@/lib/http'
 import { env, engineConfigured } from '@/lib/env'
 
-const FORWARDED_HEADERS = ['accept', 'content-type', 'authorization', 'x-request-id', 'x-ecobe-signature'] as const
+const FORWARDED_HEADERS = ['accept', 'content-type', 'x-request-id', 'x-ecobe-signature'] as const
 const HOP_BY_HOP_HEADERS = [
   'connection',
   'keep-alive',
@@ -18,6 +18,33 @@ const HOP_BY_HOP_HEADERS = [
   'content-length',
 ]
 const SIGNED_DECISION_PATHS = new Set(['ci/route', 'ci/authorize', 'ci/carbon-route'])
+const FORWARDED_PATH_PREFIXES = [
+  'health',
+  'ready',
+  'methodology',
+  'dashboard',
+  'system',
+  'ci',
+  'intelligence',
+  'integrations/dekes',
+  'forecasting',
+  'route',
+  'energy',
+  'patterns',
+  'disclosure',
+  'water',
+  'carbon-ledger',
+  'dks',
+  'adapters',
+]
+const BLOCKED_PATH_PREFIXES = [
+  'internal',
+  'events',
+  'integrations/webhooks',
+  'integrations/events/outbox',
+  'organizations',
+  'doctrine',
+]
 
 function getDecisionApiSignatureSecret() {
   return process.env.DECISION_API_SIGNATURE_SECRET ?? null
@@ -29,14 +56,16 @@ function signDecisionBody(body: Buffer) {
   return crypto.createHmac('sha256', secret).update(body).digest('hex')
 }
 
-function shouldUseInternalKey(joinedPath: string) {
-  return (
-    joinedPath === 'methodology' ||
-    joinedPath.startsWith('methodology/') ||
-    joinedPath.startsWith('disclosure/') ||
-    joinedPath.startsWith('system/') ||
-    joinedPath === 'ci/decisions/export' ||
-    joinedPath.startsWith('ci/decisions/export/')
+function isProxyPathAllowed(joinedPath: string) {
+  const normalized = joinedPath.replace(/^\/+/, '')
+  if (!normalized) return false
+
+  if (BLOCKED_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
+    return false
+  }
+
+  return FORWARDED_PATH_PREFIXES.some(
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
   )
 }
 
@@ -58,22 +87,38 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
   }
 
   const { path = [] } = await ctx.params
+  const joinedPathRaw = path.join('/')
+  if (!isProxyPathAllowed(joinedPathRaw)) {
+    return NextResponse.json(
+      {
+        error: `Path is not exposed by the ecobe-mvp broker: /api/v1/${joinedPathRaw}`,
+      },
+      { status: 404, headers: corsHeaders() },
+    )
+  }
+
   const joinedPath = path.map((part) => encodeURIComponent(part)).join('/')
   const targetUrl = new URL(`${env.ECOBE_ENGINE_URL}/api/v1/${joinedPath}${new URL(request.url).search}`)
   const headers = new Headers()
-  const useInternalKey = shouldUseInternalKey(path.join('/'))
 
   for (const header of FORWARDED_HEADERS) {
-    if (useInternalKey && header === 'authorization') continue
     const value = request.headers.get(header)
     if (value) headers.set(header, value)
   }
 
-  if (useInternalKey && env.ECOBE_ENGINE_INTERNAL_KEY) {
-    headers.set('authorization', `Bearer ${env.ECOBE_ENGINE_INTERNAL_KEY}`)
-    headers.set('x-ecobe-internal-key', env.ECOBE_ENGINE_INTERNAL_KEY)
-    headers.set('x-api-key', env.ECOBE_ENGINE_INTERNAL_KEY)
+  if (!env.ECOBE_ENGINE_INTERNAL_KEY) {
+    return NextResponse.json(
+      {
+        error: 'Engine internal auth key is not configured on ecobe-mvp.',
+      },
+      { status: 503, headers: corsHeaders() },
+    )
   }
+
+  headers.set('authorization', `Bearer ${env.ECOBE_ENGINE_INTERNAL_KEY}`)
+  headers.set('x-ecobe-internal-key', env.ECOBE_ENGINE_INTERNAL_KEY)
+  headers.set('x-api-key', env.ECOBE_ENGINE_INTERNAL_KEY)
+  headers.set('x-ecobe-broker-id', env.ECOBE_BROKER_ID)
 
   const bodyBuffer =
     request.method === 'GET' || request.method === 'HEAD'
@@ -82,7 +127,7 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
 
   if (
     bodyBuffer &&
-    SIGNED_DECISION_PATHS.has(path.join('/')) &&
+    SIGNED_DECISION_PATHS.has(joinedPathRaw) &&
     !headers.has('x-ecobe-signature')
   ) {
     const signature = signDecisionBody(bodyBuffer)
@@ -120,7 +165,7 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
     responseHeaders.delete(header)
   }
   responseHeaders.set('x-ecobe-broker', 'ecobe-mvp')
-  responseHeaders.set('x-ecobe-upstream', 'engine')
+  responseHeaders.set('x-ecobe-upstream', 'engine-internal')
 
   const responseBody = await upstream.arrayBuffer()
   return new NextResponse(responseBody, {
