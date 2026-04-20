@@ -4,6 +4,7 @@ export const env = {
   NEXT_PUBLIC_APP_URL: (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, ''),
   ECOBE_ENGINE_URL: (process.env.ECOBE_ENGINE_URL ?? '').replace(/\/$/, ''),
   ECOBE_ENGINE_INTERNAL_KEY: process.env.ECOBE_ENGINE_INTERNAL_KEY ?? '',
+  ECOBE_BROKER_ID: process.env.ECOBE_BROKER_ID ?? 'ecobe-mvp',
   SEKED_URL: (process.env.SEKED_URL ?? '').replace(/\/$/, ''),
   SEKED_INTERNAL_KEY: process.env.SEKED_INTERNAL_KEY ?? '',
   CONVERGEOS_URL: (process.env.CONVERGEOS_URL ?? '').replace(/\/$/, ''),
