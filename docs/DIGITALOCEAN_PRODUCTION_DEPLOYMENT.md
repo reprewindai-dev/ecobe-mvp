@@ -2,6 +2,13 @@
 
 `ecobe-mvp` is deployed on DigitalOcean.
 
+## App spec
+
+- App Platform spec: [`.do/app.yaml`](/Users/antho/.windsurf/ecobe-mvp/.do/app.yaml)
+- Source: `reprewindai-dev/ecobe-mvp`
+- Branch: `main`
+- Runtime: Dockerfile-based deployment on App Platform
+
 ## Production boundary
 
 - `ecobe-mvp` is the public broker boundary for `CO2 Router` and `HaloGrid`

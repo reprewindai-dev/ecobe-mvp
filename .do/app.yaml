@@ -1,0 +1,22 @@
+name: ecobe-mvp
+region: nyc
+
+ingress:
+  rules:
+    - component:
+        name: web
+      match:
+        path:
+          prefix: /
+
+services:
+  - name: web
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: reprewindai-dev/ecobe-mvp
+    source_dir: /
+    dockerfile_path: Dockerfile
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-2vcpu-4gb

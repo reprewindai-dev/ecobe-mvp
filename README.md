@@ -49,8 +49,9 @@ In production, set live `SEKED_URL` and `CONVERGEOS_URL`. The fallback path is i
 - `npm run e2e:local`
   Starts embedded Postgres, pushes both Prisma schemas, boots `ecobe-engine` and `ecobe-mvp`, and runs a governed happy-path request.
 
-## Railway production
+## DigitalOcean production
 
-- Use the split deployment guide in [docs/RAILWAY_PRODUCTION_DEPLOYMENT.md](/Users/antho/.windsurf/ecobe-mvp/docs/RAILWAY_PRODUCTION_DEPLOYMENT.md)
-- Deploy `ecobe-mvp` and `ecobe-engine` as separate Railway services
+- Use the deployment guide in [docs/DIGITALOCEAN_PRODUCTION_DEPLOYMENT.md](/Users/antho/.windsurf/ecobe-mvp/docs/DIGITALOCEAN_PRODUCTION_DEPLOYMENT.md)
+- Deploy `ecobe-mvp` as the public DigitalOcean App Platform service
+- Keep `ecobe-engine` private behind brokered internal calls only
 - Do not deploy the legacy `SekedControlPlaneMVP` archive as the runtime
