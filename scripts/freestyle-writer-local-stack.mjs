@@ -10,8 +10,8 @@ import EmbeddedPostgres from 'embedded-postgres'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const mvpRoot = path.resolve(__dirname, '..')
-const engineRoot = path.resolve(mvpRoot, '..', 'codexecobeengine-clean2', 'ecobe-engine')
-const engineClaudeRoot = path.resolve(mvpRoot, '..', 'ecobe-engineclaude', 'ecobe-engine', 'ecobe-engine')
+const engineRoot = path.resolve(mvpRoot, '..', 'ecobe-engineclaude', 'ecobe-engine')
+const engineClaudeRoot = path.resolve(mvpRoot, '..', 'ecobe-engineclaude', 'ecobe-engine')
 const freestyleWriterRoot = path.resolve(mvpRoot, '..', 'freestylewriter')
 
 const postgresPort = 35432
