@@ -16,8 +16,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "happy-path": "node scripts/happy-path.mjs",
     "e2e:local": "node scripts/e2e-local.mjs",
-    "e2e:providers": "node scripts/e2e-providers.mjs",
-    "freestyle-writer:local": "node scripts/freestyle-writer-local-stack.mjs"
+    "e2e:providers": "node scripts/e2e-providers.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",

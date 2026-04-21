@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const mvpRoot = path.resolve(__dirname, '..')
 const windsurfRoot = path.resolve(mvpRoot, '..')
-const engineRoot = path.resolve(windsurfRoot, 'ecobe-engineclaude', 'ecobe-engine')
+const engineRoot = path.resolve(windsurfRoot, 'ecobe-engineclaude')
 const sekedRoot = path.resolve(windsurfRoot, 'seked-service')
 const convergeosRoot = path.resolve(windsurfRoot, 'convergeos-service')
 
@@ -151,7 +151,7 @@ async function main() {
         PORT: String(enginePort),
         DATABASE_URL: engineDbUrl,
         DIRECT_DATABASE_URL: engineDbUrl,
-        REDIS_URL: 'redis://127.0.0.1:6379',
+        REDIS_URL: 'disabled',
         ECOBE_INTERNAL_API_KEY: engineInternalKey,
         ENGINE_BACKGROUND_WORKERS_ENABLED: 'false',
         ENGINE_OPTIONAL_WORKERS_ENABLED: 'false',
