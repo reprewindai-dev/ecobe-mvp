@@ -204,6 +204,37 @@ main::before {
   margin-top: 1.6rem;
 }
 
+.cockpit-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1.35rem;
+}
+
+.cockpit-strip__item {
+  padding: 0.85rem 0.9rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cockpit-strip__item span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cockpit-strip__item strong {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -251,6 +282,11 @@ main::before {
   padding-left: 1.15rem;
   color: var(--muted);
   line-height: 1.75;
+}
+
+.hero__surface {
+  position: sticky;
+  top: 1rem;
 }
 
 .hero__surface {
@@ -528,6 +564,10 @@ main::before {
   .cta__actions,
   .topnav {
     width: 100%;
+  }
+
+  .cockpit-strip {
+    grid-template-columns: 1fr;
   }
 
   .button {

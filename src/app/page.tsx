@@ -125,6 +125,11 @@ export default async function HomePage() {
     overview.status === 'ready'
       ? 'Public-safe live read from the control plane'
       : 'Live dependencies are still resolving, but the surface remains readable'
+  const cockpitStrip = [
+    { label: 'Live state', value: heroStateLabel },
+    { label: 'Proof', value: overview.signals.auditTrailAvailable ? 'available' : 'pending' },
+    { label: 'Replay', value: overview.signals.replayAvailable ? 'available' : 'pending' },
+  ]
 
   return (
     <main className="page-shell">
@@ -146,28 +151,37 @@ export default async function HomePage() {
       <section className="hero" id="overview">
         <div className="hero__copy">
           <span className="eyebrow">Live control plane</span>
-          <h1>Compute does not run until CO2 Router approves it.</h1>
+          <h1>Approve the run. Keep the proof.</h1>
           <p className="hero__lede">
-            This is the public face of the control plane: it turns signals into a binding decision before
-            execution, keeps the proof chain intact, and gives operators and buyers a defensible answer when
-            they ask what happened and why.
+            In three seconds, an operator sees what is live, what is degraded, and what the control plane will
+            do next. This is the public face of the gate: it turns signals into a binding decision before
+            execution and keeps the proof chain intact.
           </p>
 
           <div className="hero__actions">
             <a href="#audit" className="button button--primary">
-              View assurance
+              Open cockpit
             </a>
             <a href="#actions" className="button button--ghost">
-              Open control surface
+              View proof path
             </a>
           </div>
 
+          <div className="cockpit-strip" aria-label="Live cockpit summary">
+            {cockpitStrip.map((item) => (
+              <div className="cockpit-strip__item" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
+          </div>
+
           <div className="hero__pain">
-            <div className="hero__pain-title">Pain this solves</div>
+            <div className="hero__pain-title">What this replaces</div>
             <ul>
-              <li>Data tells you what is happening. It does not stop the workload.</li>
-              <li>Reports arrive after the decision. This keeps the decision itself auditable.</li>
-              <li>Operators need a runtime authority, not another dashboard.</li>
+              <li>A status page that only reports after the fact.</li>
+              <li>A dashboard that cannot stop or reroute a run.</li>
+              <li>A compliance story with no live authority behind it.</li>
             </ul>
           </div>
         </div>
