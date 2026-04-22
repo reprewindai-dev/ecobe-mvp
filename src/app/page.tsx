@@ -51,6 +51,18 @@ function countLabel(value: number | null | undefined) {
   return value.toLocaleString()
 }
 
+function currencyLabel(value: number | null | undefined) {
+  if (value == null || value <= 0) {
+    return 'pending'
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 function statusLabel(value: string | undefined) {
   if (!value) {
     return 'pending'
@@ -120,11 +132,40 @@ export default async function HomePage() {
     { label: 'Audit exports', value: countLabel(overview.metrics.auditExports) },
   ]
 
+  const heroMetrics = [
+    { label: 'Runs', value: countLabel(overview.metrics.runs) },
+    { label: 'Policies', value: countLabel(overview.metrics.activePolicies) },
+    { label: 'Approvals', value: countLabel(overview.metrics.pendingApprovals) },
+    { label: 'Revenue', value: currencyLabel(overview.metrics.estimatedRevenue) },
+  ]
+
   const heroStateLabel = overview.status === 'ready' ? 'Connected live' : 'Degraded snapshot'
   const heroStateCopy =
     overview.status === 'ready'
       ? 'Public-safe live read from the control plane'
       : 'Live dependencies are still resolving, but the surface remains readable'
+  const heroSignalLines = [
+    {
+      label: 'Database',
+      value: overview.checks.database ? 'live' : 'offline',
+      tone: overview.checks.database ? 'good' : 'warn',
+    },
+    {
+      label: 'Engine',
+      value: statusLabel(overview.checks.engine.status),
+      tone: overview.checks.engine.status === 'healthy' ? 'good' : 'warn',
+    },
+    {
+      label: 'Proof',
+      value: overview.signals.auditTrailAvailable ? 'available' : 'pending',
+      tone: overview.signals.auditTrailAvailable ? 'good' : 'neutral',
+    },
+    {
+      label: 'Replay',
+      value: overview.signals.replayAvailable ? 'available' : 'pending',
+      tone: overview.signals.replayAvailable ? 'good' : 'neutral',
+    },
+  ] as const
   const cockpitStrip = [
     { label: 'Live state', value: heroStateLabel },
     { label: 'Proof', value: overview.signals.auditTrailAvailable ? 'available' : 'pending' },
@@ -153,9 +194,9 @@ export default async function HomePage() {
           <span className="eyebrow">Live control plane</span>
           <h1>Approve the run. Keep the proof.</h1>
           <p className="hero__lede">
-            In three seconds, an operator sees what is live, what is degraded, and what the control plane will
-            do next. This is the public face of the gate: it turns signals into a binding decision before
-            execution and keeps the proof chain intact.
+            In three seconds, an operator sees whether the system is live, what is degraded, and which
+            decision path is available next. Buyers pay for the part that prevents waste, proves the choice,
+            and keeps the engine private while the public surface stays defensible.
           </p>
 
           <div className="hero__actions">
@@ -176,21 +217,42 @@ export default async function HomePage() {
             ))}
           </div>
 
+          <div className="hero__metrics" aria-label="Live operating metrics">
+            {heroMetrics.map((metric) => (
+              <div className="hero__metric" key={metric.label}>
+                <span>{metric.label}</span>
+                <strong>{metric.value}</strong>
+              </div>
+            ))}
+          </div>
+
           <div className="hero__pain">
-            <div className="hero__pain-title">What this replaces</div>
+            <div className="hero__pain-title">Why buyers pay</div>
             <ul>
-              <li>A status page that only reports after the fact.</li>
-              <li>A dashboard that cannot stop or reroute a run.</li>
-              <li>A compliance story with no live authority behind it.</li>
+              <li>Reporting that arrives after the wasted run is already billed.</li>
+              <li>A dashboard that cannot stop, reroute, or slow the workload in time.</li>
+              <li>A compliance story with no proof chain behind the decision.</li>
             </ul>
           </div>
         </div>
 
         <div className="hero__surface">
           <div className="surface-card surface-card--accent">
-            <div className="surface-card__label">Live status</div>
+            <div className="surface-card__label">Current posture</div>
             <div className="surface-card__value">{heroStateLabel}</div>
             <div className="surface-card__meta">{heroStateCopy}</div>
+          </div>
+
+          <div className="surface-feed" aria-label="Control-plane signal lanes">
+            {heroSignalLines.map((item) => (
+              <div className="surface-feed__row" key={item.label}>
+                <div>
+                  <div className="surface-card__label">{item.label}</div>
+                  <div className="surface-feed__value">{item.value}</div>
+                </div>
+                <div className={toneClass(item.tone)}>{item.value}</div>
+              </div>
+            ))}
           </div>
 
           <div className="surface-grid">
@@ -202,6 +264,32 @@ export default async function HomePage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="wallet-heading">
+        <div className="section__head">
+          <span className="eyebrow">Pain point</span>
+          <h2 id="wallet-heading">This exists because reporting is not control, and control is what gets bought.</h2>
+          <p>
+            Teams do not spend on another dashboard. They spend when the system can prevent carbon waste,
+            preserve audit evidence, and make the execution choice defensible to finance, ops, and compliance.
+          </p>
+        </div>
+
+        <div className="pain-grid">
+          <article className="pain-card">
+            <div className="pain-card__title">Stop the waste</div>
+            <p>Without live authority, expensive workloads run in the wrong window and the bill goes up anyway.</p>
+          </article>
+          <article className="pain-card">
+            <div className="pain-card__title">Prove the choice</div>
+            <p>Buyers want a replayable record that shows why a run was approved, delayed, rerouted, or denied.</p>
+          </article>
+          <article className="pain-card">
+            <div className="pain-card__title">Keep the engine private</div>
+            <p>The control plane can be public. The mechanism stays hidden, so the operator sees the outcome not the recipe.</p>
+          </article>
         </div>
       </section>
 

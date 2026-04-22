@@ -204,6 +204,34 @@ main::before {
   margin-top: 1.6rem;
 }
 
+.hero__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1.25rem;
+}
+
+.hero__metric {
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hero__metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hero__metric strong {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 1.08rem;
+}
+
 .cockpit-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -314,6 +342,32 @@ main::before {
   margin-top: 0.85rem;
 }
 
+.surface-feed {
+  position: relative;
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.surface-feed__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.surface-feed__value {
+  margin-top: 0.28rem;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
 .surface-card {
   position: relative;
   border-radius: 1.35rem;
@@ -398,6 +452,33 @@ main::before {
 .proof-grid {
   display: grid;
   gap: 0.85rem;
+}
+
+.pain-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.pain-card {
+  padding: 1.15rem 1.2rem;
+  border: 1px solid var(--stroke);
+  border-radius: 1.5rem;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(8, 18, 26, 0.82));
+  box-shadow: var(--shadow);
+}
+
+.pain-card__title {
+  color: var(--accent);
+  font-size: 0.84rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.pain-card p {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  line-height: 1.65;
 }
 
 .action-grid {
@@ -525,7 +606,8 @@ main::before {
   .hero,
   .section--split,
   .pricing-grid,
-  .action-grid {
+  .action-grid,
+  .pain-grid {
     grid-template-columns: 1fr;
   }
 
@@ -556,6 +638,10 @@ main::before {
     grid-template-columns: 1fr;
   }
 
+  .hero__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .hero h1 {
     max-width: none;
   }
@@ -568,6 +654,11 @@ main::before {
 
   .cockpit-strip {
     grid-template-columns: 1fr;
+  }
+
+  .surface-feed__row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .button {
