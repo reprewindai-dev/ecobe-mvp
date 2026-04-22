@@ -1,6 +1,6 @@
 # ecobe-mvp
 
-`ecobe-mvp` is the sellable governance and control-plane SaaS that sits in front of customer workloads.
+`ecobe-mvp` is the sellable control plane for CO2 Router: the public broker boundary, landing surface, and governed run API that sits in front of customer workloads.
 
 ## Owns
 
@@ -30,6 +30,7 @@
 - `POST /api/v1/billing/webhook`
 - `GET /api/v1/health`
 - `GET /api/v1/ready`
+- `GET /api/v1/public/overview`
 
 ## Required environment
 
@@ -41,6 +42,12 @@
 - `AUDIT_SIGNING_SECRET`
 - `ECOBE_ADMIN_TOKEN`
 - `STRIPE_WEBHOOK_SECRET` when receiving signed Stripe events in production
+
+Public-facing copy should stay outcome-first:
+
+- CO2 Router decides whether compute runs, waits, reroutes, throttles, or is denied.
+- The engine stays private behind the broker boundary.
+- Public pages can show live readiness, audit posture, and aggregated control-plane metrics without exposing engine internals.
 
 In production, set live `SEKED_URL` and `CONVERGEOS_URL`. The fallback path is intended for local development and test runs, not production governance.
 
