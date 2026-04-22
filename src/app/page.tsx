@@ -1,33 +1,7 @@
-'use client'
+import { buildPublicOverview, type PublicOverview } from '@/lib/public-overview'
 
-import { useEffect, useMemo, useState } from 'react'
-
-type PublicOverview = {
-  status: 'ready' | 'degraded'
-  checks: {
-    database: boolean
-    engine: { status: string; error?: string }
-    seked: { status: string; error?: string }
-    convergeos: { status: string; error?: string }
-  }
-  metrics: {
-    organizations: number
-    runs: number
-    activePolicies: number
-    pendingApprovals: number
-    openAlerts: number
-    auditExports: number
-    complianceReports: number
-    billingAccounts: number
-    activeBillingAccounts: number
-    estimatedRevenue: number
-  }
-  signals: {
-    replayAvailable: boolean
-    auditTrailAvailable: boolean
-    billingLive: boolean
-  }
-}
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 type LiveStatus = {
   label: string
@@ -70,11 +44,7 @@ function toneClass(tone: LiveStatus['tone']) {
 }
 
 function countLabel(value: number | null | undefined) {
-  if (value == null) {
-    return 'pending'
-  }
-
-  if (value <= 0) {
+  if (value == null || value <= 0) {
     return 'pending'
   }
 
@@ -97,72 +67,64 @@ function statusLabel(value: string | undefined) {
   return value.replace(/_/g, ' ')
 }
 
-export default function HomePage() {
-  const [overview, setOverview] = useState<PublicOverview | null>(null)
+function buildLiveStatuses(overview: PublicOverview): LiveStatus[] {
+  const database = overview.checks.database
+  const engineStatus = overview.checks.engine.status
+  const sekedStatus = overview.checks.seked.status
+  const convergeosStatus = overview.checks.convergeos.status
 
-  useEffect(() => {
-    const controller = new AbortController()
+  return [
+    {
+      label: 'System',
+      value: overview.status === 'ready' ? 'ready' : 'degraded',
+      tone: overview.status === 'ready' ? 'good' : 'warn',
+    },
+    {
+      label: 'Database',
+      value: database ? 'live' : 'offline',
+      tone: database ? 'good' : 'warn',
+    },
+    {
+      label: 'Engine',
+      value: statusLabel(engineStatus),
+      tone: engineStatus === 'healthy' ? 'good' : engineStatus ? 'warn' : 'neutral',
+    },
+    {
+      label: 'Seked',
+      value: statusLabel(sekedStatus),
+      tone: sekedStatus === 'healthy' ? 'good' : sekedStatus ? 'warn' : 'neutral',
+    },
+    {
+      label: 'ConvergeOS',
+      value: statusLabel(convergeosStatus),
+      tone: convergeosStatus === 'healthy' ? 'good' : convergeosStatus ? 'warn' : 'neutral',
+    },
+    {
+      label: 'Replay',
+      value: overview.signals.replayAvailable ? 'available' : 'pending',
+      tone: overview.signals.replayAvailable ? 'good' : 'neutral',
+    },
+  ]
+}
 
-    void fetch('/api/v1/public/overview', { signal: controller.signal, cache: 'no-store' })
-      .then(async (response) => {
-        const data = (await response.json()) as PublicOverview
-        setOverview(data)
-      })
-      .catch(() => {
-        setOverview(null)
-      })
-
-    return () => controller.abort()
-  }, [])
-
-  const liveStatuses = useMemo<LiveStatus[]>(() => {
-    const database = overview?.checks.database
-    const engineStatus = overview?.checks.engine.status
-    const sekedStatus = overview?.checks.seked.status
-    const convergeosStatus = overview?.checks.convergeos.status
-
-    return [
-      {
-        label: 'System',
-        value: overview?.status === 'ready' ? 'ready' : 'degraded',
-        tone: overview?.status === 'ready' ? 'good' : 'warn',
-      },
-      {
-        label: 'Database',
-        value: database == null ? 'pending' : database ? 'live' : 'offline',
-        tone: database == null ? 'neutral' : database ? 'good' : 'warn',
-      },
-      {
-        label: 'Engine',
-        value: statusLabel(engineStatus),
-        tone: engineStatus === 'healthy' ? 'good' : engineStatus ? 'warn' : 'neutral',
-      },
-      {
-        label: 'Seked',
-        value: statusLabel(sekedStatus),
-        tone: sekedStatus === 'healthy' ? 'good' : sekedStatus ? 'warn' : 'neutral',
-      },
-      {
-        label: 'ConvergeOS',
-        value: statusLabel(convergeosStatus),
-        tone: convergeosStatus === 'healthy' ? 'good' : convergeosStatus ? 'warn' : 'neutral',
-      },
-      {
-        label: 'Replay',
-        value: overview?.signals.replayAvailable ? 'available' : 'pending',
-        tone: overview?.signals.replayAvailable ? 'good' : 'neutral',
-      },
-    ]
-  }, [overview])
+export default async function HomePage() {
+  const overview = await buildPublicOverview()
+  const liveStatuses = buildLiveStatuses(overview)
 
   const metrics = [
-    { label: 'Organizations', value: countLabel(overview?.metrics.organizations) },
-    { label: 'Governed runs', value: countLabel(overview?.metrics.runs) },
-    { label: 'Active policies', value: countLabel(overview?.metrics.activePolicies) },
-    { label: 'Pending approvals', value: countLabel(overview?.metrics.pendingApprovals) },
-    { label: 'Open alerts', value: countLabel(overview?.metrics.openAlerts) },
-    { label: 'Audit exports', value: countLabel(overview?.metrics.auditExports) },
+    { label: 'Organizations', value: countLabel(overview.metrics.organizations) },
+    { label: 'Governed runs', value: countLabel(overview.metrics.runs) },
+    { label: 'Active policies', value: countLabel(overview.metrics.activePolicies) },
+    { label: 'Pending approvals', value: countLabel(overview.metrics.pendingApprovals) },
+    { label: 'Open alerts', value: countLabel(overview.metrics.openAlerts) },
+    { label: 'Audit exports', value: countLabel(overview.metrics.auditExports) },
   ]
+
+  const heroStateLabel = overview.status === 'ready' ? 'Connected live' : 'Degraded snapshot'
+  const heroStateCopy =
+    overview.status === 'ready'
+      ? 'Public-safe live read from the control plane'
+      : 'Live dependencies are still resolving, but the surface remains readable'
 
   return (
     <main className="page-shell">
@@ -213,10 +175,8 @@ export default function HomePage() {
         <div className="hero__surface">
           <div className="surface-card surface-card--accent">
             <div className="surface-card__label">Live status</div>
-            <div className="surface-card__value">{overview?.status ?? 'loading'}</div>
-            <div className="surface-card__meta">
-              {overview ? 'Public-safe live read from the control plane' : 'probing live system checks'}
-            </div>
+            <div className="surface-card__value">{heroStateLabel}</div>
+            <div className="surface-card__meta">{heroStateCopy}</div>
           </div>
 
           <div className="surface-grid">
@@ -263,19 +223,19 @@ export default function HomePage() {
           <div className="proof-grid">
             <div className="proof-card">
               <span>Proof</span>
-              <strong>{overview?.signals.auditTrailAvailable ? 'Available' : 'Pending'}</strong>
+              <strong>{overview.signals.auditTrailAvailable ? 'Available' : 'Pending'}</strong>
             </div>
             <div className="proof-card">
               <span>Replay</span>
-              <strong>{overview?.signals.replayAvailable ? 'Available' : 'Pending'}</strong>
+              <strong>{overview.signals.replayAvailable ? 'Available' : 'Pending'}</strong>
             </div>
             <div className="proof-card">
               <span>Billing</span>
-              <strong>{overview?.signals.billingLive ? 'Active' : 'Pending'}</strong>
+              <strong>{overview.signals.billingLive ? 'Active' : 'Pending'}</strong>
             </div>
             <div className="proof-card">
               <span>Engine</span>
-              <strong>{statusLabel(overview?.checks.engine.status)}</strong>
+              <strong>{statusLabel(overview.checks.engine.status)}</strong>
             </div>
           </div>
         </article>
