@@ -584,6 +584,15 @@ main::before {
   font-weight: 700;
 }
 
+.price-card__actions {
+  display: flex;
+  margin-top: 1rem;
+}
+
+.price-card__actions .button {
+  width: 100%;
+}
+
 .cta {
   margin-top: 1.5rem;
   padding: 1.4rem;
@@ -600,6 +609,131 @@ main::before {
   display: flex;
   gap: 0.8rem;
   flex-wrap: wrap;
+}
+
+.pay-page {
+  padding-bottom: 4rem;
+}
+
+.pay-hero {
+  display: grid;
+  grid-template-columns: 1fr 0.92fr;
+  gap: 1.25rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+.pay-hero__copy,
+.pay-hero__panel,
+.pay-result {
+  border: 1px solid var(--stroke);
+  background: var(--bg-elevated);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+  border-radius: 2rem;
+}
+
+.pay-hero__copy,
+.pay-hero__panel,
+.pay-result {
+  padding: 1.5rem;
+}
+
+.pay-hero__copy h1,
+.pay-result h1 {
+  margin: 1rem 0 0;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  font-size: clamp(2.4rem, 5vw, 5rem);
+}
+
+.pay-hero__copy p,
+.pay-result p {
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 1rem;
+  max-width: 60ch;
+}
+
+.pay-mode-card {
+  margin-top: 1.25rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.pay-mode-card__label {
+  color: var(--accent);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.pay-mode-card__value {
+  margin-top: 0.45rem;
+  color: var(--muted-strong);
+  line-height: 1.6;
+}
+
+.pay-form {
+  display: grid;
+  gap: 0.95rem;
+  margin-top: 1rem;
+}
+
+.pay-form__field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.pay-form__field span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pay-form__field input,
+.pay-form__field select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.8rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  font: inherit;
+}
+
+.pay-form__summary {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.pay-form__summary strong {
+  font-size: 1rem;
+}
+
+.pay-form__summary span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.pay-form__error {
+  padding: 0.85rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 124, 124, 0.3);
+  background: rgba(255, 124, 124, 0.1);
+  color: #ffd8d8;
+}
+
+.pay-form__submit {
+  width: 100%;
 }
 
 @media (max-width: 1080px) {

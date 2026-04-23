@@ -1,4 +1,4 @@
-import { buildPublicOverview, type PublicOverview } from '@/lib/public-overview'
+import { buildFallbackPublicOverview, buildPublicOverview, type PublicOverview } from '@/lib/public-overview'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -120,7 +120,7 @@ function buildLiveStatuses(overview: PublicOverview): LiveStatus[] {
 }
 
 export default async function HomePage() {
-  const overview = await buildPublicOverview()
+  const overview = await buildPublicOverview().catch(() => buildFallbackPublicOverview())
   const liveStatuses = buildLiveStatuses(overview)
 
   const metrics = [
@@ -142,9 +142,15 @@ export default async function HomePage() {
   const heroStateLabel = overview.status === 'ready' ? 'Connected live' : 'Degraded snapshot'
   const heroStateCopy =
     overview.status === 'ready'
-      ? 'Public-safe live read from the control plane'
-      : 'Live dependencies are still resolving, but the surface remains readable'
+      ? 'Live backend connected. This is the real operating mode.'
+      : 'Simulation fallback active. The surface still renders, but live dependencies are missing.'
+  const modeLabel = overview.status === 'ready' ? 'Live mode' : 'Simulation mode'
   const heroSignalLines = [
+    {
+      label: 'Mode',
+      value: modeLabel,
+      tone: overview.status === 'ready' ? 'good' : 'warn',
+    },
     {
       label: 'Database',
       value: overview.checks.database ? 'live' : 'offline',
@@ -167,6 +173,7 @@ export default async function HomePage() {
     },
   ] as const
   const cockpitStrip = [
+    { label: 'Mode', value: modeLabel },
     { label: 'Live state', value: heroStateLabel },
     { label: 'Proof', value: overview.signals.auditTrailAvailable ? 'available' : 'pending' },
     { label: 'Replay', value: overview.signals.replayAvailable ? 'available' : 'pending' },
@@ -371,16 +378,31 @@ export default async function HomePage() {
             <div className="price-card__tier">Operator</div>
             <div className="price-card__value">Control</div>
             <p>Best for teams that need a live authority for approval, delay, reroute, throttle, and deny.</p>
+            <div className="price-card__actions">
+              <a className="button button--primary" href="/pay?plan=tier_1">
+                Pay now
+              </a>
+            </div>
           </article>
           <article className="price-card">
             <div className="price-card__tier">Assurance</div>
             <div className="price-card__value">Proof</div>
             <p>Best for customers that need a replayable decision path and a defensible answer for audit.</p>
+            <div className="price-card__actions">
+              <a className="button button--primary" href="/pay?plan=tier_2">
+                Pay now
+              </a>
+            </div>
           </article>
           <article className="price-card">
             <div className="price-card__tier">Enterprise</div>
             <div className="price-card__value">Authority</div>
             <p>Best for buyers that want the control plane embedded into their operating model and contracts.</p>
+            <div className="price-card__actions">
+              <a className="button button--primary" href="/pay?plan=tier_3">
+                Pay now
+              </a>
+            </div>
           </article>
         </div>
       </section>

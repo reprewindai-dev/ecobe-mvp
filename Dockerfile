@@ -1,23 +1,32 @@
 FROM node:20-alpine AS base
-WORKDIR /app
 
 FROM base AS deps
-COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts --no-audit --no-fund
+WORKDIR /app
+COPY package.json ./package.json
+COPY package-lock.json ./package-lock.json
+RUN npm install
 
-FROM base AS build
+FROM base AS builder
+WORKDIR /app
+ARG BUILDTIME_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ecobe_mvp"
+ENV DATABASE_URL=${BUILDTIME_DATABASE_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN npm run prisma:generate
 RUN npm run build
 
-FROM base AS runtime
+FROM base AS runner
+WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV HOST=0.0.0.0
-WORKDIR /app
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/package-lock.json ./package-lock.json
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
+ENV HOSTNAME=0.0.0.0
+
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/package-lock.json ./package-lock.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
+
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["npm","run","start:production"]

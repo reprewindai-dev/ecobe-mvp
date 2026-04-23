@@ -107,6 +107,47 @@ export async function createStripeCheckoutSession(input: {
   }
 }
 
+export async function createPublicStripeCheckoutSession(input: {
+  email: string
+  planTier: PlanTier
+  successUrl?: string | null
+  cancelUrl?: string | null
+}) {
+  const client = requireStripe()
+  const priceId = priceIdForPlanTier(input.planTier)
+
+  if (!priceId) {
+    throw new Error(`Missing Stripe price id for ${input.planTier}`)
+  }
+
+  const session = await client.checkout.sessions.create({
+    mode: 'subscription',
+    customer_email: input.email,
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: resolveCheckoutUrl(input.successUrl, env.STRIPE_CHECKOUT_SUCCESS_URL, '/pay/success'),
+    cancel_url: resolveCheckoutUrl(input.cancelUrl, env.STRIPE_CHECKOUT_CANCEL_URL, '/pay/cancel'),
+    allow_promotion_codes: true,
+    metadata: {
+      billingMode: 'public',
+      planTier: input.planTier,
+      purchaserEmail: input.email,
+    },
+    subscription_data: {
+      metadata: {
+        billingMode: 'public',
+        planTier: input.planTier,
+        purchaserEmail: input.email,
+      },
+    },
+  })
+
+  return {
+    sessionId: session.id,
+    url: session.url,
+    planTier: input.planTier,
+  }
+}
+
 export async function createStripePortalSession(input: {
   organizationId: string
   organizationSlug: string

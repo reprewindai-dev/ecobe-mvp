@@ -31,6 +31,37 @@ export type PublicOverview = {
   }
 }
 
+export function buildFallbackPublicOverview(): PublicOverview {
+  const configStatus = governanceFallbackAllowed() ? 'not_configured' : 'missing_dependency'
+
+  return {
+    status: 'degraded',
+    checks: {
+      database: false,
+      engine: { status: configStatus },
+      seked: { status: configStatus },
+      convergeos: { status: configStatus },
+    },
+    metrics: {
+      organizations: 0,
+      runs: 0,
+      activePolicies: 0,
+      pendingApprovals: 0,
+      openAlerts: 0,
+      auditExports: 0,
+      complianceReports: 0,
+      billingAccounts: 0,
+      activeBillingAccounts: 0,
+      estimatedRevenue: 0,
+    },
+    signals: {
+      replayAvailable: false,
+      auditTrailAvailable: false,
+      billingLive: false,
+    },
+  }
+}
+
 type RevenueResult = { _sum: { amountUsd: number | null } }
 
 type CachedOverview = {
@@ -140,35 +171,49 @@ async function computePublicOverview(): Promise<PublicOverview> {
 }
 
 export async function buildPublicOverview(options?: { forceRefresh?: boolean }): Promise<PublicOverview> {
-  const now = Date.now()
-  const forceRefresh = options?.forceRefresh ?? false
+  try {
+    const now = Date.now()
+    const forceRefresh = options?.forceRefresh ?? false
 
-  if (!forceRefresh && cachedOverview && cachedOverview.expiresAt > now) {
-    return cachedOverview.value
+    if (!forceRefresh && cachedOverview && cachedOverview.expiresAt > now) {
+      return cachedOverview.value
+    }
+
+    if (!forceRefresh && cachedOverview && cachedOverview.staleAt > now) {
+      void refreshPublicOverview()
+      return cachedOverview.value
+    }
+
+    return await refreshPublicOverview()
+  } catch {
+    return buildFallbackPublicOverview()
   }
-
-  if (!forceRefresh && cachedOverview && cachedOverview.staleAt > now) {
-    void refreshPublicOverview()
-    return cachedOverview.value
-  }
-
-  return refreshPublicOverview()
 }
 
 async function refreshPublicOverview(): Promise<PublicOverview> {
-  if (!refreshPromise) {
-    refreshPromise = computePublicOverview().finally(() => {
-      refreshPromise = null
-    })
-  }
+  try {
+    if (!refreshPromise) {
+      refreshPromise = computePublicOverview().finally(() => {
+        refreshPromise = null
+      })
+    }
 
-  const value = await refreshPromise
-  const now = Date.now()
-  cachedOverview = {
-    value,
-    expiresAt: now + OVERVIEW_CACHE_TTL_MS,
-    staleAt: now + OVERVIEW_CACHE_STALE_MS,
-  }
+    const value = await refreshPromise
+    const now = Date.now()
+    cachedOverview = {
+      value,
+      expiresAt: now + OVERVIEW_CACHE_TTL_MS,
+      staleAt: now + OVERVIEW_CACHE_STALE_MS,
+    }
 
-  return value
+    return value
+  } catch {
+    const fallback = buildFallbackPublicOverview()
+    cachedOverview = {
+      value: fallback,
+      expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS,
+      staleAt: Date.now() + OVERVIEW_CACHE_STALE_MS,
+    }
+    return fallback
+  }
 }
