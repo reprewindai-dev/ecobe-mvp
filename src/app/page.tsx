@@ -133,17 +133,17 @@ export default async function HomePage() {
   ]
 
   const heroMetrics = [
-    { label: 'Runs', value: countLabel(overview.metrics.runs) },
-    { label: 'Policies', value: countLabel(overview.metrics.activePolicies) },
-    { label: 'Approvals', value: countLabel(overview.metrics.pendingApprovals) },
+    { label: 'Customers', value: countLabel(overview.metrics.organizations) },
+    { label: 'Runs guided', value: countLabel(overview.metrics.runs) },
+    { label: 'Rules live', value: countLabel(overview.metrics.activePolicies) },
     { label: 'Revenue', value: currencyLabel(overview.metrics.estimatedRevenue) },
   ]
 
   const heroStateLabel = overview.status === 'ready' ? 'Connected live' : 'Degraded snapshot'
   const heroStateCopy =
     overview.status === 'ready'
-      ? 'Live backend connected. This is the real operating mode.'
-      : 'Simulation fallback active. The surface still renders, but live dependencies are missing.'
+      ? 'Live platform connected. This is the real thing.'
+      : 'Fallback mode is active. The page still works, but live data is missing.'
   const modeLabel = overview.status === 'ready' ? 'Live mode' : 'Simulation mode'
   const heroSignalLines = [
     {
@@ -173,7 +173,7 @@ export default async function HomePage() {
     },
   ] as const
   const cockpitStrip = [
-    { label: 'Mode', value: modeLabel },
+    { label: 'Status', value: modeLabel },
     { label: 'Live state', value: heroStateLabel },
     { label: 'Proof', value: overview.signals.auditTrailAvailable ? 'available' : 'pending' },
     { label: 'Replay', value: overview.signals.replayAvailable ? 'available' : 'pending' },
@@ -184,13 +184,13 @@ export default async function HomePage() {
       <header className="topbar">
         <div>
           <div className="brand-mark">CO2 Router</div>
-          <div className="brand-subtitle">Decision Infrastructure Interface</div>
+          <div className="brand-subtitle">Simple control for modern teams</div>
         </div>
 
         <nav className="topnav" aria-label="Primary">
           <a href="#overview">Overview</a>
-          <a href="#audit">Audit</a>
-          <a href="#actions">Actions</a>
+          <a href="#audit">Demo</a>
+          <a href="#actions">Use cases</a>
           <a href="#pricing">Pricing</a>
           <a href="#contact">Contact</a>
         </nav>
@@ -198,20 +198,18 @@ export default async function HomePage() {
 
       <section className="hero" id="overview">
         <div className="hero__copy">
-          <span className="eyebrow">Live control plane</span>
-          <h1>Approve the run. Keep the proof.</h1>
+          <span className="eyebrow">See it at a glance</span>
+          <h1>See the demo. Keep control.</h1>
           <p className="hero__lede">
-            In three seconds, an operator sees whether the system is live, what is degraded, and which
-            decision path is available next. Buyers pay for the part that prevents waste, proves the choice,
-            and keeps the engine private while the public surface stays defensible.
+            Teams get a clear answer fast. You get fewer mistakes and a record you can explain later.
           </p>
 
           <div className="hero__actions">
             <a href="#audit" className="button button--primary">
-              Open cockpit
+              See the demo
             </a>
             <a href="#actions" className="button button--ghost">
-              View proof path
+              See pricing
             </a>
           </div>
 
@@ -237,12 +235,12 @@ export default async function HomePage() {
 
         <div className="hero__surface">
           <div className="surface-card surface-card--accent">
-            <div className="surface-card__label">Current posture</div>
+            <div className="surface-card__label">What the buyer sees</div>
             <div className="surface-card__value">{heroStateLabel}</div>
             <div className="surface-card__meta">{heroStateCopy}</div>
           </div>
 
-          <div className="surface-feed" aria-label="Control-plane signal lanes">
+          <div className="surface-feed" aria-label="Control signal lanes">
             {heroSignalLines.map((item) => (
               <div className="surface-feed__row" key={item.label}>
                 <div>
@@ -268,37 +266,35 @@ export default async function HomePage() {
 
       <section className="section" aria-labelledby="wallet-heading">
         <div className="section__head">
-          <span className="eyebrow">Pain point</span>
-          <h2 id="wallet-heading">This exists because reporting is not control, and control is what gets bought.</h2>
+          <span className="eyebrow">Why teams buy it</span>
+          <h2 id="wallet-heading">They buy fewer mistakes, cleaner approvals, and a record they can explain later.</h2>
           <p>
-            Teams do not spend on another dashboard. They spend when the system can prevent carbon waste,
-            preserve audit evidence, and make the execution choice defensible to finance, ops, and compliance.
+            This product helps teams say yes, no, or wait, then shows exactly why the answer was made.
           </p>
         </div>
 
         <div className="pain-grid">
           <article className="pain-card">
             <div className="pain-card__title">Stop the waste</div>
-            <p>Without live authority, expensive workloads run in the wrong window and the bill goes up anyway.</p>
+            <p>The wrong run costs money. This stops it early.</p>
           </article>
           <article className="pain-card">
             <div className="pain-card__title">Prove the choice</div>
-            <p>Buyers want a replayable record that shows why a run was approved, delayed, rerouted, or denied.</p>
+            <p>Every decision is tracked and easy to explain later.</p>
           </article>
           <article className="pain-card">
             <div className="pain-card__title">Keep the engine private</div>
-            <p>The control plane can be public. The mechanism stays hidden, so the operator sees the outcome not the recipe.</p>
+            <p>Buyers see the result, not the machinery.</p>
           </article>
         </div>
       </section>
 
       <section className="section" aria-labelledby="proof-heading" id="audit">
         <div className="section__head">
-          <span className="eyebrow">Assurance</span>
-          <h2 id="proof-heading">Five binding actions. One replayable decision path.</h2>
+          <span className="eyebrow">Demo</span>
+          <h2 id="proof-heading">Five ways to guide a run. One clear path.</h2>
           <p>
-            The product is not a dashboard that watches the system from the outside. It is the authority that
-            decides whether a run should proceed, wait, move, slow down, or stop.
+            Teams can approve, delay, reroute, slow down, or stop a run before it causes damage.
           </p>
         </div>
 
@@ -314,11 +310,11 @@ export default async function HomePage() {
 
       <section className="section section--split">
         <article className="panel panel--wide">
-          <span className="eyebrow">Evidence</span>
-          <h2>Every decision carries proof, replay, and a reason a customer can defend.</h2>
+          <span className="eyebrow">Proof</span>
+          <h2>Every decision stays on the record.</h2>
           <p>
-            The control plane is built to preserve provenance without oversharing internals. That means the
-            customer sees the outcome, the operator can inspect the path, and the engine stays private.
+            The customer sees the outcome, the operator can inspect the path, and the internal mechanism stays
+            private.
           </p>
 
           <div className="proof-grid">
@@ -343,7 +339,7 @@ export default async function HomePage() {
 
         <aside className="panel">
           <span className="eyebrow">Live metrics</span>
-          <h2>Operational posture</h2>
+          <h2>What is working now</h2>
           <div className="metric-list">
             {metrics.map((metric) => (
               <div className="metric-row" key={metric.label}>
@@ -358,18 +354,25 @@ export default async function HomePage() {
       <section className="section" id="pricing">
         <div className="section__head">
           <span className="eyebrow">Pricing</span>
-          <h2>Built to sell control, proof, and replay at the point of execution.</h2>
+          <h2>Pick the level of control your team needs.</h2>
           <p>
-            The pitch is simple: customers pay for a system that enforces policy, preserves auditability, and
-            keeps the private engine boundary invisible to the public surface.
+            Start small, add more freedom as needed, and unlock full control when the team is ready.
+          </p>
+        </div>
+
+        <div className="incentive-note" aria-label="Possible incentives">
+          <span className="eyebrow">Possible incentives</span>
+          <p>
+            Depending on your region and project scope, customers may also qualify for rebates, tax deductions,
+            or financing programs.
           </p>
         </div>
 
         <div className="pricing-grid">
           <article className="price-card">
-            <div className="price-card__tier">Operator</div>
-            <div className="price-card__value">Control</div>
-            <p>Best for teams that need a live authority for approval, delay, reroute, throttle, and deny.</p>
+            <div className="price-card__tier">Starter</div>
+            <div className="price-card__value">Demo</div>
+            <p>Best for teams that want simple guardrails and a fast start.</p>
             <div className="price-card__actions">
               <a className="button button--primary" href="/pay?plan=tier_1">
                 Pay now
@@ -377,9 +380,9 @@ export default async function HomePage() {
             </div>
           </article>
           <article className="price-card">
-            <div className="price-card__tier">Assurance</div>
+            <div className="price-card__tier">Growth</div>
             <div className="price-card__value">Proof</div>
-            <p>Best for customers that need a replayable decision path and a defensible answer for audit.</p>
+            <p>Best for teams that want more control and a clearer paper trail.</p>
             <div className="price-card__actions">
               <a className="button button--primary" href="/pay?plan=tier_2">
                 Pay now
@@ -389,7 +392,7 @@ export default async function HomePage() {
           <article className="price-card">
             <div className="price-card__tier">Enterprise</div>
             <div className="price-card__value">Authority</div>
-            <p>Best for buyers that want the control plane embedded into their operating model and contracts.</p>
+            <p>Best for buyers that need more freedom and two-person approval.</p>
             <div className="price-card__actions">
               <a className="button button--primary" href="/pay?plan=tier_3">
                 Pay now
@@ -402,17 +405,19 @@ export default async function HomePage() {
       <section className="cta" id="contact">
         <div>
           <span className="eyebrow">Ready</span>
-          <h2>Operators get the answer, buyers get the proof, and the engine stays private.</h2>
+          <h2>They get the result. You keep the proof.</h2>
         </div>
         <div className="cta__actions">
           <a href="/api/v1/public/overview" className="button button--primary">
-            Live summary JSON
+            Live summary
           </a>
           <a href="/api/v1/health" className="button button--ghost">
-            System health
+            Status
           </a>
         </div>
       </section>
     </main>
   )
 }
+
+

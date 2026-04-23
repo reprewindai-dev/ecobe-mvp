@@ -178,7 +178,7 @@ main::before {
 }
 
 .hero h1 {
-  max-width: 11ch;
+  max-width: 13ch;
   font-size: clamp(3rem, 5.8vw, 6rem);
 }
 
@@ -552,6 +552,25 @@ main::before {
 
 .pricing-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.incentive-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--stroke);
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.incentive-note p {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .price-card {
