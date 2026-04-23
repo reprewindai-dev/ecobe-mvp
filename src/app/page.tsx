@@ -233,14 +233,6 @@ export default async function HomePage() {
             ))}
           </div>
 
-          <div className="hero__pain">
-            <div className="hero__pain-title">Why buyers pay</div>
-            <ul>
-              <li>Reporting that arrives after the wasted run is already billed.</li>
-              <li>A dashboard that cannot stop, reroute, or slow the workload in time.</li>
-              <li>A compliance story with no proof chain behind the decision.</li>
-            </ul>
-          </div>
         </div>
 
         <div className="hero__surface">
