@@ -33,6 +33,18 @@ export type PublicOverview = {
 
 type RevenueResult = { _sum: { amountUsd: number | null } }
 
+type CachedOverview = {
+  value: PublicOverview
+  expiresAt: number
+  staleAt: number
+}
+
+const OVERVIEW_CACHE_TTL_MS = 15_000
+const OVERVIEW_CACHE_STALE_MS = 45_000
+
+let cachedOverview: CachedOverview | null = null
+let refreshPromise: Promise<PublicOverview> | null = null
+
 function toCount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
@@ -41,17 +53,9 @@ function settledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
   return result.status === 'fulfilled' ? result.value : fallback
 }
 
-export async function buildPublicOverview(): Promise<PublicOverview> {
-  let database = false
-
-  try {
-    await prisma.$queryRaw`SELECT 1`
-    database = true
-  } catch {
-    database = false
-  }
-
+async function computePublicOverview(): Promise<PublicOverview> {
   const [
+    databaseResult,
     engineResult,
     sekedResult,
     convergeosResult,
@@ -66,6 +70,7 @@ export async function buildPublicOverview(): Promise<PublicOverview> {
     billingAccountsResult,
     activeBillingAccountsResult,
   ] = await Promise.allSettled([
+    prisma.$queryRaw`SELECT 1`,
     getEngineHealth(),
     getSekedHealth(),
     getConvergeosHealth(),
@@ -80,6 +85,8 @@ export async function buildPublicOverview(): Promise<PublicOverview> {
     prisma.billingAccount.count(),
     prisma.billingAccount.count({ where: { status: 'active' } }),
   ])
+
+  const database = databaseResult.status === 'fulfilled'
 
   const organizations = toCount(settledValue(organizationsResult, 0))
   const runs = toCount(settledValue(runsResult, 0))
@@ -130,4 +137,38 @@ export async function buildPublicOverview(): Promise<PublicOverview> {
       billingLive: activeBillingAccounts > 0,
     },
   }
+}
+
+export async function buildPublicOverview(options?: { forceRefresh?: boolean }): Promise<PublicOverview> {
+  const now = Date.now()
+  const forceRefresh = options?.forceRefresh ?? false
+
+  if (!forceRefresh && cachedOverview && cachedOverview.expiresAt > now) {
+    return cachedOverview.value
+  }
+
+  if (!forceRefresh && cachedOverview && cachedOverview.staleAt > now) {
+    void refreshPublicOverview()
+    return cachedOverview.value
+  }
+
+  return refreshPublicOverview()
+}
+
+async function refreshPublicOverview(): Promise<PublicOverview> {
+  if (!refreshPromise) {
+    refreshPromise = computePublicOverview().finally(() => {
+      refreshPromise = null
+    })
+  }
+
+  const value = await refreshPromise
+  const now = Date.now()
+  cachedOverview = {
+    value,
+    expiresAt: now + OVERVIEW_CACHE_TTL_MS,
+    staleAt: now + OVERVIEW_CACHE_STALE_MS,
+  }
+
+  return value
 }

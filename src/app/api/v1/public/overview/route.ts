@@ -9,5 +9,8 @@ export async function GET() {
 
   return json(snapshot, {
     status: snapshot.status === 'ready' ? 200 : 503,
+    headers: {
+      'cache-control': 'public, max-age=0, s-maxage=15, stale-while-revalidate=45',
+    },
   })
 }
