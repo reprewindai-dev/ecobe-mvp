@@ -1,22 +1,22 @@
-import { blogPosts } from '@/lib/blog-posts'
+import { technicalPosts } from '@/lib/technical-posts'
 
-import { BlogLoop } from './blog-loop'
+import { BlogLoop } from '../blog/blog-loop'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function BlogPage() {
+export default function ResearchPage() {
   return (
     <main className="page-shell blog-page">
       <header className="topbar">
         <div>
-          <div className="brand-mark">Public Blog</div>
-          <div className="brand-subtitle">Simple notes for buyers and operators</div>
+          <div className="brand-mark">Technical Notes</div>
+          <div className="brand-subtitle">For operators, engineers, and auditors</div>
         </div>
 
         <nav className="topnav" aria-label="Primary">
           <a href="/">Home</a>
-          <a href="/research">Technical notes</a>
+          <a href="/blog">Public blog</a>
           <a href="/pay">Pay</a>
           <a href="/api/v1/public/overview">JSON</a>
         </nav>
@@ -24,19 +24,19 @@ export default function BlogPage() {
 
       <section className="blog-hero">
         <div className="blog-hero__copy">
-          <span className="eyebrow">Blog</span>
-          <h1>Simple updates, product notes, and reasons people buy.</h1>
+          <span className="eyebrow">Research</span>
+          <h1>Architecture notes, policy detail, and implementation updates.</h1>
           <p>
-            This page stays public and simple. The technical notes live on a separate page for the people who
-            want architecture and implementation detail.
+            This is the deeper lane for the people who want the wiring, the tradeoffs, and the proof behind
+            the public surface. The public site stays simple. This page carries the technical detail.
           </p>
         </div>
 
-        <BlogLoop posts={blogPosts} />
+        <BlogLoop posts={technicalPosts} />
       </section>
 
       <section className="blog-grid">
-        {blogPosts.map((post) => (
+        {technicalPosts.map((post) => (
           <article className="blog-card" key={post.slug}>
             <div className="blog-card__eyebrow">{post.eyebrow}</div>
             <h2>{post.title}</h2>

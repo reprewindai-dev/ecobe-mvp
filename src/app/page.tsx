@@ -198,8 +198,8 @@ export default async function HomePage() {
 
       <section className="hero" id="overview">
         <div className="hero__copy">
-          <span className="eyebrow">See it at a glance</span>
-          <h1>See the demo. Keep control.</h1>
+          <span className="eyebrow">Trusted by teams that move fast</span>
+          <h1>Control every run. Explain later.</h1>
           <p className="hero__lede">
             Teams get a clear answer fast. You get fewer mistakes and a record you can explain later.
           </p>
@@ -235,7 +235,7 @@ export default async function HomePage() {
 
         <div className="hero__surface">
           <div className="surface-card surface-card--accent">
-            <div className="surface-card__label">What the buyer sees</div>
+            <div className="surface-card__label">What they see</div>
             <div className="surface-card__value">{heroStateLabel}</div>
             <div className="surface-card__meta">{heroStateCopy}</div>
           </div>
@@ -266,7 +266,7 @@ export default async function HomePage() {
 
       <section className="section" aria-labelledby="wallet-heading">
         <div className="section__head">
-          <span className="eyebrow">Why teams buy it</span>
+          <span className="eyebrow">Why teams choose it</span>
           <h2 id="wallet-heading">They buy fewer mistakes, cleaner approvals, and a record they can explain later.</h2>
           <p>
             This product helps teams say yes, no, or wait, then shows exactly why the answer was made.
@@ -291,7 +291,7 @@ export default async function HomePage() {
 
       <section className="section" aria-labelledby="proof-heading" id="audit">
         <div className="section__head">
-          <span className="eyebrow">Demo</span>
+          <span className="eyebrow">How it works</span>
           <h2 id="proof-heading">Five ways to guide a run. One clear path.</h2>
           <p>
             Teams can approve, delay, reroute, slow down, or stop a run before it causes damage.
@@ -310,7 +310,7 @@ export default async function HomePage() {
 
       <section className="section section--split">
         <article className="panel panel--wide">
-          <span className="eyebrow">Proof</span>
+          <span className="eyebrow">Record</span>
           <h2>Every decision stays on the record.</h2>
           <p>
             The customer sees the outcome, the operator can inspect the path, and the internal mechanism stays
@@ -338,7 +338,7 @@ export default async function HomePage() {
         </article>
 
         <aside className="panel">
-          <span className="eyebrow">Live metrics</span>
+          <span className="eyebrow">Live status</span>
           <h2>What is working now</h2>
           <div className="metric-list">
             {metrics.map((metric) => (
@@ -356,23 +356,15 @@ export default async function HomePage() {
           <span className="eyebrow">Pricing</span>
           <h2>Pick the level of control your team needs.</h2>
           <p>
-            Start small, add more freedom as needed, and unlock full control when the team is ready.
-          </p>
-        </div>
-
-        <div className="incentive-note" aria-label="Possible incentives">
-          <span className="eyebrow">Possible incentives</span>
-          <p>
-            Depending on your region and project scope, customers may also qualify for rebates, tax deductions,
-            or financing programs.
+            Start with guardrails, expand control when needed, and move to full authority when the team is ready.
           </p>
         </div>
 
         <div className="pricing-grid">
           <article className="price-card">
-            <div className="price-card__tier">Starter</div>
-            <div className="price-card__value">Demo</div>
-            <p>Best for teams that want simple guardrails and a fast start.</p>
+            <div className="price-card__tier">Launch</div>
+            <div className="price-card__value">Guardrails</div>
+            <p>Best for teams that want simple guardrails and immediate clarity.</p>
             <div className="price-card__actions">
               <a className="button button--primary" href="/pay?plan=tier_1">
                 Pay now
@@ -382,7 +374,7 @@ export default async function HomePage() {
           <article className="price-card">
             <div className="price-card__tier">Growth</div>
             <div className="price-card__value">Proof</div>
-            <p>Best for teams that want more control and a clearer paper trail.</p>
+            <p>Best for teams that want more control and a cleaner paper trail.</p>
             <div className="price-card__actions">
               <a className="button button--primary" href="/pay?plan=tier_2">
                 Pay now
