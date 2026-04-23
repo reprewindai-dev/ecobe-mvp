@@ -1,0 +1,35 @@
+name: live-smoke
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 10 * * *'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SITE_URLS: https://co2router.com https://www.co2router.com
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check public site
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for site in $SITE_URLS; do
+            echo "Testing $site"
+
+            for path in / /blog /research /api/v1/public/overview /api/v1/health; do
+              echo "  -> $path"
+              curl -fsS "$site$path" >/dev/null
+            done
+
+            echo "Site passed: $site"
+          done

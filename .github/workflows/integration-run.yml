@@ -1,0 +1,49 @@
+name: integration-run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * *'
+
+jobs:
+  run-product:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ecobe_platform?schema=mvp
+    steps:
+      - name: Checkout ecobe-mvp
+        uses: actions/checkout@v4
+        with:
+          path: ecobe-mvp
+
+      - name: Checkout ecobe-engineclaude
+        uses: actions/checkout@v4
+        with:
+          repository: reprewindai-dev/ecobe-engineclaude
+          path: ecobe-engineclaude
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            ecobe-mvp/package-lock.json
+            ecobe-engineclaude/package-lock.json
+
+      - name: Install MVP dependencies
+        run: npm ci
+        working-directory: ecobe-mvp
+
+      - name: Install engine dependencies
+        run: npm ci
+        working-directory: ecobe-engineclaude
+
+      - name: Run full integration path
+        run: npm run e2e:local
+        working-directory: ecobe-mvp
