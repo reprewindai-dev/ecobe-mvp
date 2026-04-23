@@ -1,33 +1,27 @@
 # DigitalOcean Production Deployment
 
-`ecobe-mvp` is deployed on DigitalOcean.
+`ecobe-mvp` is deployed on DigitalOcean App Platform.
 
 ## App spec
 
-- App Platform spec: [`.do/app.yaml`](/Users/antho/.windsurf/ecobe-mvp/.do/app.yaml)
+- App Platform spec: [`.do/app.yaml`](/Users/antho/OneDrive/Desktop/.windsurf/ecobe-mvp/.do/app.yaml)
 - Source: `reprewindai-dev/ecobe-mvp`
 - Branch: `main`
-- Runtime: Dockerfile-based deployment on App Platform
+- Runtime: `Dockerfile`-based deployment
 
 ## Production boundary
 
-- `ecobe-mvp` is the public broker boundary for `CO2 Router` and `HaloGrid`
-- `ecobe-engine` remains private behind brokered internal calls only
-- no Railway services, private networking, or Railway-specific config belong in this repo
+- `ecobe-mvp` is the public controller layer for policy storage, decision routing, and proof logging
+- `ENGINE_URL` points at the private engine service
+- no Railway-specific config belongs in this repo
 
 ## Runtime requirements
 
-- `DATABASE_URL`
-- `ECOBE_ENGINE_URL`
-- `ECOBE_ENGINE_INTERNAL_KEY`
-- `SEKED_URL`
-- `CONVERGEOS_URL`
-- `AUDIT_SIGNING_SECRET`
-- `ECOBE_ADMIN_TOKEN`
-- `STRIPE_WEBHOOK_SECRET` when Stripe webhooks are enabled
+- `ENGINE_URL`
+- `PORT` optional, defaults to `3000`
 
 ## Deployment rule
 
 - keep platform config external to the application source
-- keep broker identity and path allowlists enforced in code
+- keep broker/engine separation enforced in code
 - do not reintroduce Railway-specific deployment artifacts

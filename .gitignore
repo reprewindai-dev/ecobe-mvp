@@ -45,6 +45,14 @@ jspm_packages/
 
 # Optional npm cache directory
 .npm
+.npm-cache/
+
+# Local build output
+dist/
+
+# Local tool caches
+.railway-cli/
+.local/
 
 # Optional eslint cache
 .eslintcache

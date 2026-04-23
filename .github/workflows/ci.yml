@@ -5,14 +5,12 @@ on:
     branches:
       - main
       - master
-      - 'codex/**'
+      - "codex/**"
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ecobe_platform?schema=mvp
     steps:
       - uses: actions/checkout@v4
 
@@ -21,11 +19,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
-
-      - run: npx prisma validate
-
-      - run: npm run prisma:generate
+      - run: npm ci --ignore-scripts
 
       - run: npm run type-check
 

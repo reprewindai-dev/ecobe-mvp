@@ -1,64 +1,89 @@
 # ecobe-mvp
 
-`ecobe-mvp` is the sellable control plane for CO2 Router: the public broker boundary, landing surface, and governed run API that sits in front of customer workloads.
+`ecobe-mvp` is a Node.js Express controller for policy storage, decision routing, and proof logging.
 
-## Owns
+## Runtime
 
-- public `/v1` API
-- dashboard
-- organizations, projects, environments
-- API keys and service accounts
-- policy management
-- governed run lifecycle
-- usage, billing, audit views, exports
+- Node.js 20+
+- Express
+- In-memory state only
 
-## Uses under the hood
+## Environment
 
-- Seked governance evaluation
-- ConvergeOS reliability evaluation
-- `ecobe-engine` internal routing and allocation API
+- `ENGINE_URL=http://localhost:3001`
+- `PORT=3000`
 
-## Core public endpoints
+## Endpoints
 
-- `POST /api/v1/bootstrap`
-- `POST /api/v1/runs`
-- `GET /api/v1/runs/:id`
-- `GET /api/v1/runs/:id/events`
-- `GET /api/v1/usage`
-- `GET/POST /api/v1/policies`
-- `GET/POST /api/v1/keys`
-- `POST /api/v1/billing/webhook`
-- `GET /api/v1/health`
-- `GET /api/v1/ready`
-- `GET /api/v1/public/overview`
+### `POST /policies`
 
-## Required environment
+Stores a policy in memory.
 
-- `DATABASE_URL` using the `mvp` schema, for example `postgresql://.../ecobe_platform?schema=mvp`
-- `ECOBE_ENGINE_URL`
-- `ECOBE_ENGINE_INTERNAL_KEY`
-- `SEKED_URL` and optional `SEKED_INTERNAL_KEY`, or `USE_LOCAL_GOVERNANCE_FALLBACK=true` for local development only
-- `CONVERGEOS_URL` and optional `CONVERGEOS_INTERNAL_KEY`, or `USE_LOCAL_GOVERNANCE_FALLBACK=true` for local development only
-- `AUDIT_SIGNING_SECRET`
-- `ECOBE_ADMIN_TOKEN`
-- `STRIPE_WEBHOOK_SECRET` when receiving signed Stripe events in production
+```json
+{
+  "name": "default",
+  "threshold": 250,
+  "delay_seconds": 30
+}
+```
 
-Public-facing copy should stay outcome-first:
+Response:
 
-- CO2 Router decides whether compute runs, waits, reroutes, throttles, or is denied.
-- The engine stays private behind the broker boundary.
-- Public pages can show live readiness, audit posture, and aggregated control-plane metrics without exposing engine internals.
+```json
+{
+  "status": "saved",
+  "policy_id": "uuid"
+}
+```
 
-In production, set live `SEKED_URL` and `CONVERGEOS_URL`. The fallback path is intended for local development and test runs, not production governance.
+### `GET /policies`
 
-## Local end-to-end
+Returns all stored policies.
 
-- `npm run e2e:local`
-  Starts embedded Postgres, pushes both Prisma schemas, boots `ecobe-engine` and `ecobe-mvp`, and runs a governed happy-path request.
+### `POST /decision`
 
-## DigitalOcean production
+Creates a decision for a job.
 
-- Use the deployment guide in [docs/DIGITALOCEAN_PRODUCTION_DEPLOYMENT.md](/Users/antho/.windsurf/ecobe-mvp/docs/DIGITALOCEAN_PRODUCTION_DEPLOYMENT.md)
-- Deploy `ecobe-mvp` as the public DigitalOcean App Platform service
-- Keep `ecobe-engine` private behind brokered internal calls only
-- Do not deploy the legacy `SekedControlPlaneMVP` archive as the runtime
+```json
+{
+  "job_id": "job-123",
+  "timestamp": "2026-04-23T12:00:00.000Z",
+  "workload_type": "batch"
+}
+```
+
+Behavior:
+
+- uses the latest policy, or a default policy if none exist
+- generates a carbon value between 100 and 600
+- calls `ENGINE_URL/evaluate`
+- fail-opens to `RUN` if the engine fails
+- stores a proof in memory
+
+Response:
+
+```json
+{
+  "action": "RUN",
+  "delay_seconds": 0,
+  "proof_id": "uuid",
+  "carbon_value": 412
+}
+```
+
+### `GET /proofs`
+
+Returns the in-memory proof log.
+
+### `GET /health`
+
+Returns service health.
+
+## Commands
+
+```bash
+npm install
+npm run dev
+npm run build
+npm start
+```

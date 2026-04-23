@@ -50,7 +50,7 @@ router.post("/decision", async (req: Request, res: Response) => {
   }
 
   const policy = getActivePolicy();
-  const carbon_value = generateCarbonValue(`${job_id}:${timestamp}:${workload_type}:${policy.threshold}:${policy.delay_seconds}`);
+  const carbon_value = generateCarbonValue();
 
   let action: DecisionAction = "RUN";
   let delay_seconds = 0;
