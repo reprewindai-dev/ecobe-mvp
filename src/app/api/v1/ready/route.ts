@@ -27,7 +27,7 @@ export async function GET() {
 
   const ready =
     database &&
-    ['healthy', 'not_configured'].includes(engine.status) &&
+    ['healthy', 'ok', 'not_configured'].includes(engine.status) &&
     isOptionalDependencyReady(seked.status) &&
     isOptionalDependencyReady(convergeos.status)
 
