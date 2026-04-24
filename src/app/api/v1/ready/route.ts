@@ -3,7 +3,6 @@ import { json } from '@/lib/http'
 import { getEngineHealth } from '@/lib/engine'
 import { getSekedHealth } from '@/lib/seked'
 import { getConvergeosHealth } from '@/lib/convergeos'
-import { governanceFallbackAllowed } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,13 +22,14 @@ export async function GET() {
     getConvergeosHealth(),
   ])
 
+  const isOptionalDependencyReady = (status: string) =>
+    status === 'healthy' || status === 'not_configured' || status === 'missing_dependency'
+
   const ready =
     database &&
     ['healthy', 'not_configured'].includes(engine.status) &&
-    (seked.status === 'healthy' ||
-      (seked.status === 'not_configured' && governanceFallbackAllowed())) &&
-    (convergeos.status === 'healthy' ||
-      (convergeos.status === 'not_configured' && governanceFallbackAllowed()))
+    isOptionalDependencyReady(seked.status) &&
+    isOptionalDependencyReady(convergeos.status)
 
   return json({
     status: ready ? 'ready' : 'degraded',
