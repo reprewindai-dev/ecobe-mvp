@@ -1,5 +1,14 @@
 # ecobe-mvp
 
+## Workspace Map
+
+This workspace is split across four production repos:
+
+- `ecobe-engineclaude`: the canonical engine. Owns routing, replay, proof, adapters, and provider intelligence.
+- `co2router-site`: the public-facing website. Owns the marketing site and the interactive CI/CD demo.
+- `co2router-site` remote tech checkout: the same site repo on a separate branch for the operator and proof surface.
+- `ecobe-mvp`: the remote runtime and proxy. Accepts demo traffic and forwards it to the engine over the private boundary.
+
 `ecobe-mvp` is a Node.js Express controller for policy storage, decision routing, and proof logging.
 
 ## Runtime
