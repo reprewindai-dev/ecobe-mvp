@@ -20,7 +20,7 @@ export async function createRoutingDecision(payload: Record<string, any>) {
   }
 
   try {
-    return await fetchJson(`${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions`, {
+    return await fetchJson(`${env.ECOBE_ENGINE_URL}/api/v1/routing-decisions`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -30,7 +30,7 @@ export async function createRoutingDecision(payload: Record<string, any>) {
     })
   } catch (error) {
     throw new Error(
-      `Engine routing decision failed against ${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions: ${
+      `Engine routing decision failed against ${env.ECOBE_ENGINE_URL}/api/v1/routing-decisions: ${
         error instanceof Error ? error.message : String(error)
       }`,
     )
@@ -43,7 +43,7 @@ export async function executeAllocation(decisionId: string) {
   }
 
   try {
-    return await fetchJson(`${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions/${decisionId}/execute`, {
+    return await fetchJson(`${env.ECOBE_ENGINE_URL}/api/v1/routing-decisions/${decisionId}/execute`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${env.ECOBE_ENGINE_INTERNAL_KEY}`,
@@ -51,7 +51,7 @@ export async function executeAllocation(decisionId: string) {
     })
   } catch (error) {
     throw new Error(
-      `Engine allocation failed against ${env.ECOBE_ENGINE_URL}/internal/v1/routing-decisions/${decisionId}/execute: ${
+      `Engine allocation failed against ${env.ECOBE_ENGINE_URL}/api/v1/routing-decisions/${decisionId}/execute: ${
         error instanceof Error ? error.message : String(error)
       }`,
     )
@@ -60,7 +60,7 @@ export async function executeAllocation(decisionId: string) {
 
 export async function getEngineHealth() {
   try {
-    return await fetchJson(`${env.ECOBE_ENGINE_URL}/internal/v1/health`, {
+    return await fetchJson(`${env.ECOBE_ENGINE_URL}/api/v1/health`, {
       headers: {
         authorization: `Bearer ${env.ECOBE_ENGINE_INTERNAL_KEY}`,
       },
@@ -69,6 +69,7 @@ export async function getEngineHealth() {
     return {
       status: 'unreachable',
       error: error instanceof Error ? error.message : String(error),
+      upstream: `${env.ECOBE_ENGINE_URL}/api/v1/health`,
     }
   }
 }
