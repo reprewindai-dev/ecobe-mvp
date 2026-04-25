@@ -10,6 +10,7 @@ const requestSchema = z.object({
 const DEFAULT_SCENARIO = 'nightly_analytics_batch'
 const CACHE_FRESH_MS = 90_000
 const CACHE_REFRESH_AFTER_MS = 20_000
+const SANDBOX_ENGINE_IDEMPOTENCY_VERSION = 'v4'
 
 type EngineAuthorizeResponse = {
   decision?: 'run_now' | 'reroute' | 'delay' | 'throttle' | 'deny'
@@ -112,6 +113,10 @@ function parseScenario(input: unknown) {
   return parsed.scenario ?? DEFAULT_SCENARIO
 }
 
+function getScenarioCacheKey(scenario: string) {
+  return `${SANDBOX_ENGINE_IDEMPOTENCY_VERSION}:${scenario}`
+}
+
 function buildLaneDefinitions(scenario: string): LaneDefinition[] {
   const workload = {
     name: 'nightly-analytics-batch',
@@ -130,7 +135,7 @@ function buildLaneDefinitions(scenario: string): LaneDefinition[] {
       label: 'Lane 1 - Production',
       request: {
         requestId: `sandbox-${scenario}-prod`,
-        idempotencyKey: `sandbox:${scenario}:prod:v3`,
+        idempotencyKey: `sandbox:${scenario}:prod:${SANDBOX_ENGINE_IDEMPOTENCY_VERSION}`,
         caller: { id: 'co2router-mvp-sandbox' },
         scenario,
         workload,
@@ -165,7 +170,7 @@ function buildLaneDefinitions(scenario: string): LaneDefinition[] {
       label: 'Lane 2 - Staging',
       request: {
         requestId: `sandbox-${scenario}-staging`,
-        idempotencyKey: `sandbox:${scenario}:staging:v3`,
+        idempotencyKey: `sandbox:${scenario}:staging:${SANDBOX_ENGINE_IDEMPOTENCY_VERSION}`,
         caller: { id: 'co2router-mvp-sandbox' },
         scenario,
         workload,
@@ -200,7 +205,7 @@ function buildLaneDefinitions(scenario: string): LaneDefinition[] {
       label: 'Lane 3 - Experiments',
       request: {
         requestId: `sandbox-${scenario}-experiments`,
-        idempotencyKey: `sandbox:${scenario}:experiments:v3`,
+        idempotencyKey: `sandbox:${scenario}:experiments:${SANDBOX_ENGINE_IDEMPOTENCY_VERSION}`,
         caller: { id: 'co2router-mvp-sandbox' },
         scenario,
         workload,
@@ -235,7 +240,7 @@ function buildLaneDefinitions(scenario: string): LaneDefinition[] {
       label: 'Lane 4 - Over the line',
       request: {
         requestId: `sandbox-${scenario}-overline`,
-        idempotencyKey: `sandbox:${scenario}:overline:v3`,
+        idempotencyKey: `sandbox:${scenario}:overline:${SANDBOX_ENGINE_IDEMPOTENCY_VERSION}`,
         caller: { id: 'co2router-mvp-sandbox' },
         scenario,
         workload,
@@ -271,7 +276,7 @@ function buildLaneDefinitions(scenario: string): LaneDefinition[] {
       label: 'Lane 5 - Needs two keys',
       request: {
         requestId: `sandbox-${scenario}-needs-two-keys`,
-        idempotencyKey: `sandbox:${scenario}:needs-two-keys:v3`,
+        idempotencyKey: `sandbox:${scenario}:needs-two-keys:${SANDBOX_ENGINE_IDEMPOTENCY_VERSION}`,
         caller: { id: 'co2router-mvp-sandbox' },
         scenario,
         workload,
@@ -416,12 +421,13 @@ async function refreshScenario(scenario: string) {
   }
 
   const cache = getCache()
-  const current = cache.get(scenario)
+  const cacheKey = getScenarioCacheKey(scenario)
+  const current = cache.get(cacheKey)
   if (current?.refreshPromise) return current.refreshPromise
 
   const refreshPromise = computeLiveSandboxSample(scenario)
     .then((result) => {
-      cache.set(scenario, {
+      cache.set(cacheKey, {
         scenario,
         refreshedAt: Date.now(),
         result,
@@ -429,13 +435,13 @@ async function refreshScenario(scenario: string) {
       return result
     })
     .finally(() => {
-      const latest = cache.get(scenario)
+      const latest = cache.get(cacheKey)
       if (latest?.refreshPromise === refreshPromise) {
         delete latest.refreshPromise
       }
     })
 
-  cache.set(scenario, {
+  cache.set(cacheKey, {
     scenario,
     refreshedAt: current?.refreshedAt ?? 0,
     result: current?.result ?? {
@@ -452,7 +458,7 @@ async function refreshScenario(scenario: string) {
 export async function runSandboxSample(input: unknown): Promise<SandboxRunResponse> {
   const scenario = parseScenario(input)
   const cache = getCache()
-  const entry = cache.get(scenario)
+  const entry = cache.get(getScenarioCacheKey(scenario))
 
   if (entry?.result.lanes.length) {
     const ageMs = Date.now() - entry.refreshedAt
