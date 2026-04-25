@@ -13,6 +13,8 @@ export const env = {
   ECOBE_ENGINE_URL: cleanUrlEnvValue(process.env.ECOBE_ENGINE_URL),
   ECOBE_ENGINE_INTERNAL_KEY: cleanEnvValue(process.env.ECOBE_ENGINE_INTERNAL_KEY),
   ECOBE_BROKER_ID: cleanEnvValue(process.env.ECOBE_BROKER_ID) || 'ecobe-mvp',
+  CRON_SECRET: cleanEnvValue(process.env.CRON_SECRET),
+  SANDBOX_WARM_TOKEN: cleanEnvValue(process.env.SANDBOX_WARM_TOKEN),
   SEKED_URL: cleanUrlEnvValue(process.env.SEKED_URL),
   SEKED_INTERNAL_KEY: cleanEnvValue(process.env.SEKED_INTERNAL_KEY),
   CONVERGEOS_URL: cleanUrlEnvValue(process.env.CONVERGEOS_URL),

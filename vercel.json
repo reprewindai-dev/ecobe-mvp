@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/v1/sandbox/warm",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/v1/(.*)",
