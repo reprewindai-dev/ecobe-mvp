@@ -6,7 +6,7 @@ export type EngineDecision = {
 };
 
 function getEngineUrl(): string {
-  const engineUrl = process.env.ENGINE_URL ?? "http://localhost:3001";
+  const engineUrl = process.env.ECOBE_ENGINE_URL ?? process.env.ENGINE_URL ?? "http://localhost:3001";
   return engineUrl.replace(/\/+$/, "");
 }
 
