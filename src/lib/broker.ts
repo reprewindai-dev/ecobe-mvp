@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'crypto'
 
-import { env } from './env'
+import { env, getEngineBaseUrl } from './env'
 
 export const BROKER_REPO_NAME = 'ecobe-mvp'
 export const BROKER_PRODUCT_NAME = 'CO2 Router'
@@ -76,11 +76,12 @@ export async function brokeredEngineFetch(input: {
   body?: string | null
   headers?: HeadersInit
 }) {
-  if (!env.ECOBE_ENGINE_URL || !env.ECOBE_ENGINE_INTERNAL_KEY) {
+  const engineBaseUrl = getEngineBaseUrl()
+  if (!engineBaseUrl || !env.ECOBE_ENGINE_INTERNAL_KEY) {
     throw new Error('ECOBE engine is not configured. Set ECOBE_ENGINE_URL and ECOBE_ENGINE_INTERNAL_KEY.')
   }
 
-  const url = new URL(input.path, env.ECOBE_ENGINE_URL)
+  const url = new URL(input.path, engineBaseUrl)
   assertEnginePathAllowed(url.pathname)
 
   const headers = createEngineBrokerHeaders({

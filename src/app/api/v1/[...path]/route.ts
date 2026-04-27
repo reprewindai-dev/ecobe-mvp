@@ -3,7 +3,7 @@ import crypto from 'crypto'
 import { NextResponse } from 'next/server'
 
 import { corsHeaders } from '@/lib/http'
-import { env, engineConfigured } from '@/lib/env'
+import { env, engineConfigured, getEngineBaseUrl } from '@/lib/env'
 
 const FORWARDED_HEADERS = ['accept', 'content-type', 'x-request-id', 'x-ecobe-signature'] as const
 const HOP_BY_HOP_HEADERS = [
@@ -86,6 +86,16 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
     )
   }
 
+  const engineBaseUrl = getEngineBaseUrl()
+  if (!engineBaseUrl) {
+    return NextResponse.json(
+      {
+        error: 'Broker target is not configured. Set ECOBE_ENGINE_URL.',
+      },
+      { status: 503, headers: corsHeaders() },
+    )
+  }
+
   const { path = [] } = await ctx.params
   const joinedPathRaw = path.join('/')
   if (!isProxyPathAllowed(joinedPathRaw)) {
@@ -98,7 +108,7 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
   }
 
   const joinedPath = path.map((part) => encodeURIComponent(part)).join('/')
-  const targetUrl = new URL(`${env.ECOBE_ENGINE_URL}/api/v1/${joinedPath}${new URL(request.url).search}`)
+  const targetUrl = new URL(`${engineBaseUrl}/api/v1/${joinedPath}${new URL(request.url).search}`)
   const headers = new Headers()
 
   for (const header of FORWARDED_HEADERS) {
@@ -166,6 +176,7 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
   }
   responseHeaders.set('x-ecobe-broker', 'ecobe-mvp')
   responseHeaders.set('x-ecobe-upstream', 'engine-internal')
+  responseHeaders.set('x-ecobe-upstream-base', engineBaseUrl)
 
   const responseBody = await upstream.arrayBuffer()
   return new NextResponse(responseBody, {

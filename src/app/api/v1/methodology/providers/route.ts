@@ -1,6 +1,6 @@
 import { json } from '@/lib/http'
 
-import { env, engineConfigured } from '@/lib/env'
+import { env, engineConfigured, getEngineBaseUrl } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +33,14 @@ export async function GET() {
     )
   }
 
+  const engineBaseUrl = getEngineBaseUrl()
+  if (!engineBaseUrl) {
+    return json(
+      { error: 'ECOBE engine broker is not configured.' },
+      { status: 503 },
+    )
+  }
+
   const headers = new Headers({
     accept: 'application/json',
     authorization: `Bearer ${env.ECOBE_ENGINE_INTERNAL_KEY}`,
@@ -41,7 +49,7 @@ export async function GET() {
   })
 
   try {
-    const response = await fetch(`${env.ECOBE_ENGINE_URL}/api/v1/health`, {
+    const response = await fetch(`${engineBaseUrl}/api/v1/health`, {
       headers,
       cache: 'no-store',
     })
@@ -71,6 +79,7 @@ export async function GET() {
         headers: {
           'x-ecobe-broker': 'ecobe-mvp',
           'x-ecobe-upstream': 'engine-health-derived',
+          'x-ecobe-upstream-base': engineBaseUrl,
         },
       },
     )
