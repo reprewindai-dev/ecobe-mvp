@@ -6,12 +6,13 @@ const host = process.env.HOST ?? '0.0.0.0'
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 const next = process.platform === 'win32' ? 'node_modules/.bin/next.cmd' : 'node_modules/.bin/next'
 
-const migrate = spawnSync(npx, ['prisma', 'migrate', 'deploy'], {
+const migrate = spawnSync(npx, ['prisma', 'db', 'push', '--accept-data-loss'], {
   stdio: 'inherit',
   env: process.env,
 })
 
 if (migrate.status !== 0) {
+  console.error('prisma db push failed with status', migrate.status)
   process.exit(migrate.status ?? 1)
 }
 

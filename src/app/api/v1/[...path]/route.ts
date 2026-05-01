@@ -47,7 +47,12 @@ const BLOCKED_PATH_PREFIXES = [
 ]
 
 function getDecisionApiSignatureSecret() {
-  return process.env.DECISION_API_SIGNATURE_SECRET ?? null
+  const raw = process.env.DECISION_API_SIGNATURE_SECRET ?? ''
+  const cleaned = raw
+    .replace(/\\r\\n|\\n|\\r/g, '')
+    .replace(/[\r\n]+/g, '')
+    .trim()
+  return cleaned.length > 0 ? cleaned : null
 }
 
 function signDecisionBody(body: Buffer) {
