@@ -20,3 +20,27 @@ services:
     http_port: 3000
     instance_count: 1
     instance_size_slug: apps-s-2vcpu-4gb
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: ECOBE_ENGINE_URL
+        value: "http://5.78.135.11:8000"
+        type: SECRET
+      - key: ECOBE_API_URL
+        value: "http://5.78.135.11:8000"
+        type: SECRET
+      - key: ECOBE_ENGINE_INTERNAL_KEY
+        value: "ycC8f1utsgW+7P4by0FHnempof8NRxG+WyFeVtIbNMESyf1Bb90gCLOM/P84UlyU"
+        type: SECRET
+      - key: NEXT_PUBLIC_APP_URL
+        value: "https://co2router.tech"
+      - key: NEXT_PUBLIC_APP_NAME
+        value: "CO2 Router"
+      - key: USE_LOCAL_GOVERNANCE_FALLBACK
+        value: "false"
+      - key: ECOBE_ADMIN_TOKEN
+        value: "ecobe-admin-aa272fc7d2444b44baced9bf82462c29"
+        type: SECRET
+      - key: AUDIT_SIGNING_SECRET
+        value: "A7dOlI+suOXK7g+K+mQyJk5VzrnyiYSPfK3aTO5moc5eAnTvLeQ8KDIIokF0nvzN"
+        type: SECRET
