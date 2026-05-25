@@ -8,6 +8,7 @@ import { env, engineConfigured, getEngineBaseUrl } from '@/lib/env'
 const FORWARDED_HEADERS = ['accept', 'content-type', 'x-request-id', 'x-ecobe-signature'] as const
 const HOP_BY_HOP_HEADERS = [
   'connection',
+  'content-encoding',
   'keep-alive',
   'proxy-authenticate',
   'proxy-authorization',
@@ -64,6 +65,7 @@ function signDecisionBody(body: Buffer) {
 function isProxyPathAllowed(joinedPath: string) {
   const normalized = joinedPath.replace(/^\/+/, '')
   if (!normalized) return false
+  if (normalized === 'decisions/recent') return true
 
   if (BLOCKED_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     return false
@@ -72,6 +74,13 @@ function isProxyPathAllowed(joinedPath: string) {
   return FORWARDED_PATH_PREFIXES.some(
     (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`),
   )
+}
+
+function resolveBrokerTargetPath(joinedPathRaw: string) {
+  if (joinedPathRaw === 'decisions/recent') {
+    return 'ci/decisions'
+  }
+  return joinedPathRaw
 }
 
 function getEngineTimeoutMs() {
@@ -112,7 +121,8 @@ async function proxy(request: Request, ctx: { params: Promise<{ path?: string[] 
     )
   }
 
-  const joinedPath = path.map((part) => encodeURIComponent(part)).join('/')
+  const targetPathRaw = resolveBrokerTargetPath(joinedPathRaw)
+  const joinedPath = targetPathRaw.split('/').map((part) => encodeURIComponent(part)).join('/')
   const targetUrl = new URL(`${engineBaseUrl}/api/v1/${joinedPath}${new URL(request.url).search}`)
   const headers = new Headers()
 
