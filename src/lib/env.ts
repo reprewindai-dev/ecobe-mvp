@@ -33,12 +33,17 @@ export const env = {
     process.env.CO2ROUTER_X402_ENABLED !== undefined
       ? process.env.CO2ROUTER_X402_ENABLED === 'true'
       : true,
-  CO2ROUTER_PAY_TO: cleanEnvValue(process.env.CO2ROUTER_PAY_TO),
+  CO2ROUTER_PAY_TO:
+    cleanEnvValue(process.env.CO2ROUTER_PAY_TO) ||
+    cleanEnvValue(process.env.X402_RECEIVER_WALLET),
   CO2ROUTER_X402_PUBLIC_URL:
     cleanUrlEnvValue(process.env.CO2ROUTER_X402_PUBLIC_URL) || 'https://x402.co2router.com',
   CO2ROUTER_MCP_PUBLIC_URL:
     cleanUrlEnvValue(process.env.CO2ROUTER_MCP_PUBLIC_URL) || 'https://mcp.co2router.com',
-  CO2ROUTER_X402_NETWORK: cleanEnvValue(process.env.CO2ROUTER_X402_NETWORK) || 'eip155:8453',
+  CO2ROUTER_X402_NETWORK:
+    cleanEnvValue(process.env.CO2ROUTER_X402_NETWORK) ||
+    cleanEnvValue(process.env.X402_NETWORK) ||
+    'eip155:8453',
   CO2ROUTER_X402_FACILITATOR_URL:
     cleanUrlEnvValue(process.env.CO2ROUTER_X402_FACILITATOR_URL) ||
     'https://x402.org/facilitator',
