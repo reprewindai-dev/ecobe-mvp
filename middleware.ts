@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-ECOBE-Internal-Key, X-ECOBE-Signature, X-Request-Id, X-API-Key, Accept',
-  'Access-Control-Expose-Headers': 'x-ecobe-broker, x-ecobe-upstream',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-ECOBE-Internal-Key, X-ECOBE-Signature, X-Request-Id, X-API-Key, Accept, PAYMENT-SIGNATURE, X-PAYMENT',
+  'Access-Control-Expose-Headers': 'x-ecobe-broker, x-ecobe-upstream, PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE',
   'Access-Control-Max-Age': '86400',
 } as const
 
@@ -32,5 +32,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/v1/:path*'],
+  matcher: ['/api/v1/:path*', '/x402/:path*', '/mcp/:path*'],
 }

@@ -9,9 +9,9 @@ export function corsHeaders(init?: HeadersInit) {
   corsHeaderValue(
     headers,
     'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, X-Requested-With, X-ECOBE-Internal-Key, X-ECOBE-Signature, X-Request-Id, X-API-Key, Accept',
+    'Content-Type, Authorization, X-Requested-With, X-ECOBE-Internal-Key, X-ECOBE-Signature, X-Request-Id, X-API-Key, Accept, PAYMENT-SIGNATURE, X-PAYMENT',
   )
-  corsHeaderValue(headers, 'Access-Control-Expose-Headers', 'x-ecobe-broker, x-ecobe-upstream')
+  corsHeaderValue(headers, 'Access-Control-Expose-Headers', 'x-ecobe-broker, x-ecobe-upstream, PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE')
   corsHeaderValue(headers, 'Vary', 'Origin')
   corsHeaderValue(headers, 'Access-Control-Max-Age', '86400')
   return headers

@@ -228,6 +228,28 @@ model UsageRecord {
   run            Run?         @relation(fields: [runId], references: [id], onDelete: SetNull)
 }
 
+model X402PaymentEvent {
+  id              String   @id @default(cuid())
+  routePath       String
+  routeMethod     String
+  status          String
+  priceUsd        Float    @default(0)
+  payer           String?
+  transactionHash String?
+  network         String?
+  decisionFrameId String?
+  proofHash       String?
+  upstreamStatus  Int?
+  userAgent       String?
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([routePath, createdAt])
+  @@index([payer, createdAt])
+  @@index([transactionHash])
+  @@index([decisionFrameId])
+}
+
 model BillingAccount {
   id               String         @id @default(cuid())
   organizationId   String         @unique

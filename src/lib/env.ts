@@ -29,6 +29,22 @@ export const env = {
   ECOBE_ENGINE_URL: cleanUrlEnvValue(process.env.ECOBE_ENGINE_URL),
   ECOBE_ENGINE_INTERNAL_KEY: cleanEnvValue(process.env.ECOBE_ENGINE_INTERNAL_KEY),
   ECOBE_BROKER_ID: cleanEnvValue(process.env.ECOBE_BROKER_ID) || 'ecobe-mvp',
+  CO2ROUTER_X402_ENABLED:
+    process.env.CO2ROUTER_X402_ENABLED !== undefined
+      ? process.env.CO2ROUTER_X402_ENABLED === 'true'
+      : true,
+  CO2ROUTER_PAY_TO: cleanEnvValue(process.env.CO2ROUTER_PAY_TO),
+  CO2ROUTER_X402_PUBLIC_URL:
+    cleanUrlEnvValue(process.env.CO2ROUTER_X402_PUBLIC_URL) || 'https://x402.co2router.com',
+  CO2ROUTER_MCP_PUBLIC_URL:
+    cleanUrlEnvValue(process.env.CO2ROUTER_MCP_PUBLIC_URL) || 'https://mcp.co2router.com',
+  CO2ROUTER_X402_NETWORK: cleanEnvValue(process.env.CO2ROUTER_X402_NETWORK) || 'eip155:8453',
+  CO2ROUTER_X402_FACILITATOR_URL:
+    cleanUrlEnvValue(process.env.CO2ROUTER_X402_FACILITATOR_URL) ||
+    'https://x402.org/facilitator',
+  CO2ROUTER_X402_FACILITATOR_BEARER_TOKEN: cleanEnvValue(
+    process.env.CO2ROUTER_X402_FACILITATOR_BEARER_TOKEN,
+  ),
   CRON_SECRET: cleanEnvValue(process.env.CRON_SECRET),
   SANDBOX_WARM_TOKEN: cleanEnvValue(process.env.SANDBOX_WARM_TOKEN),
   SEKED_URL: cleanUrlEnvValue(process.env.SEKED_URL),
