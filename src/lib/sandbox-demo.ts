@@ -69,13 +69,28 @@ type SandboxCacheGlobal = typeof globalThis & {
   __ecobeSandboxDemoCache?: Map<string, SandboxCacheEntry>
 }
 
+function getDecisionApiSignatureSecret() {
+  const raw = process.env.DECISION_API_SIGNATURE_SECRET ?? ''
+  const cleaned = raw
+    .replace(/\\r\\n|\\n|\\r/g, '')
+    .replace(/[\r\n]+/g, '')
+    .trim()
+  return cleaned.length > 0 ? cleaned : null
+}
+
+function signDecisionBody(body: Buffer) {
+  const secret = getDecisionApiSignatureSecret()
+  if (!secret) return null
+  return crypto.createHmac('sha256', secret).update(body).digest('hex')
+}
+
 function getCache() {
   const globalRef = globalThis as SandboxCacheGlobal
   globalRef.__ecobeSandboxDemoCache ??= new Map()
   return globalRef.__ecobeSandboxDemoCache
 }
 
-function getEngineHeaders() {
+function getEngineHeaders(): Record<string, string> {
   return {
     accept: 'application/json',
     'content-type': 'application/json',
@@ -312,10 +327,17 @@ function buildLaneDefinitions(scenario: string): LaneDefinition[] {
 }
 
 async function callEngine(input: Record<string, unknown>): Promise<EngineAuthorizeResponse> {
+  const bodyBuffer = Buffer.from(JSON.stringify(input))
+  const headers = getEngineHeaders()
+  const signature = signDecisionBody(bodyBuffer)
+  if (signature) {
+    headers['x-ecobe-signature'] = `v1=${signature}`
+  }
+
   const response = await fetch(`${env.ECOBE_ENGINE_URL}/api/v1/ci/authorize`, {
     method: 'POST',
-    headers: getEngineHeaders(),
-    body: JSON.stringify(input),
+    headers,
+    body: bodyBuffer,
     cache: 'no-store',
   })
 
