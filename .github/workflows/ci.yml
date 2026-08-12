@@ -25,6 +25,8 @@ jobs:
 
       - run: npm test
 
+      - run: npm run verify:portable-offline
+
       - run: npx prisma validate
 
       - run: npm run prisma:generate
