@@ -1,7 +1,9 @@
 # CO2 Router Portable Authority Architecture
 
-Status: **Approved and locked**  
-Approved: 2026-08-12  
+Status: **Approved and locked**
+
+Approved: 2026-08-12
+
 Implementation owner: `ecobe-mvp` (Authority/MCP) with `ecobe-engineclaude` (private engine)
 
 ## 1. Objective
