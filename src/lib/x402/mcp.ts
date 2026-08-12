@@ -1,24 +1,27 @@
-import { co2RouterX402RouteMeta } from '@/lib/x402/routes'
+import { co2RouterX402RouteMeta, type X402RouteId } from '@/lib/x402/routes'
 import { env } from '@/lib/env'
+import { CO2_ROUTER_TOOLS } from '@/lib/mcp/tool-catalog'
 
-function toolNameFromId(id: string) {
-  return `co2router_${id.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`)}`
-}
+const hostedRouteByTool: Readonly<Record<string, X402RouteId>> = {
+  co2router_route: 'route',
+  co2router_explain: 'runEvents',
+  co2router_proof: 'proof',
+  co2router_replay: 'run',
+} as const
 
 export function buildMcpTools() {
-  return co2RouterX402RouteMeta.map((route) => ({
-    name: toolNameFromId(route.id),
-    description: route.description,
-    inputSchema:
-      route.inputSchema ??
-      route.pathParamsSchema ?? {
-        type: 'object',
-        properties: {},
-        additionalProperties: false,
-      },
+  return CO2_ROUTER_TOOLS.map((definition) => {
+    const routeId = hostedRouteByTool[definition.name]
+    const route = co2RouterX402RouteMeta.find((candidate) => candidate.id === routeId)
+    if (!route) throw new Error(`Missing x402 metadata for ${definition.name}`)
+
+    return {
+    name: definition.name,
+    description: definition.description,
+    inputSchema: definition.inputJsonSchema,
     annotations: {
-      title: route.description,
-      readOnlyHint: route.method === 'GET',
+      title: definition.title,
+      readOnlyHint: definition.riskClass === 'READ',
       destructiveHint: false,
       idempotentHint: route.method === 'GET',
       openWorldHint: true,
@@ -30,7 +33,8 @@ export function buildMcpTools() {
       network: env.CO2ROUTER_X402_NETWORK,
       resource: `${env.CO2ROUTER_X402_PUBLIC_URL}${route.path}`,
     },
-  }))
+  }
+  })
 }
 
 export function buildMcpManifest() {
