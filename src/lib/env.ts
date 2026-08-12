@@ -29,6 +29,12 @@ export const env = {
   ECOBE_ENGINE_URL: cleanUrlEnvValue(process.env.ECOBE_ENGINE_URL),
   ECOBE_ENGINE_INTERNAL_KEY: cleanEnvValue(process.env.ECOBE_ENGINE_INTERNAL_KEY),
   ECOBE_BROKER_ID: cleanEnvValue(process.env.ECOBE_BROKER_ID) || 'ecobe-mvp',
+  CO2ROUTER_LICENSE_FILE: cleanEnvValue(process.env.CO2ROUTER_LICENSE_FILE),
+  CO2ROUTER_TRUST_STORE_FILE: cleanEnvValue(process.env.CO2ROUTER_TRUST_STORE_FILE),
+  CO2ROUTER_INSTALLATION_ID: cleanEnvValue(process.env.CO2ROUTER_INSTALLATION_ID),
+  CO2ROUTER_PRODUCT_MAJOR_VERSION: Number(
+    cleanEnvValue(process.env.CO2ROUTER_PRODUCT_MAJOR_VERSION) || 1,
+  ),
   CO2ROUTER_X402_ENABLED:
     process.env.CO2ROUTER_X402_ENABLED !== undefined
       ? process.env.CO2ROUTER_X402_ENABLED === 'true'
