@@ -117,6 +117,6 @@ export const CO2_ROUTER_TOOLS = Object.freeze([
   },
 ] satisfies readonly Co2RouterToolDefinition<any>[])
 
-export function getToolDefinition(name: string) {
+export function getToolDefinition(name: string): Co2RouterToolDefinition<any> | undefined {
   return CO2_ROUTER_TOOLS.find((tool) => tool.name === name)
 }
