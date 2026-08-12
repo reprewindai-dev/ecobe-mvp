@@ -35,6 +35,11 @@ export const env = {
   CO2ROUTER_PRODUCT_MAJOR_VERSION: Number(
     cleanEnvValue(process.env.CO2ROUTER_PRODUCT_MAJOR_VERSION) || 1,
   ),
+  CO2ROUTER_MCP_HTTP_TOKEN: cleanEnvValue(process.env.CO2ROUTER_MCP_HTTP_TOKEN),
+  CO2ROUTER_MCP_ALLOWED_ORIGINS: cleanEnvValue(process.env.CO2ROUTER_MCP_ALLOWED_ORIGINS)
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   CO2ROUTER_X402_ENABLED:
     process.env.CO2ROUTER_X402_ENABLED !== undefined
       ? process.env.CO2ROUTER_X402_ENABLED === 'true'

@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run build:mcp",
+    "build:mcp": "esbuild src/cli/co2router-mcp.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/co2router-mcp.mjs --banner:js=\"#!/usr/bin/env node\"",
     "start": "next start",
     "start:production": "node scripts/start-production.mjs",
     "test": "tsx --test src/__tests__/*.test.ts",
@@ -21,6 +22,7 @@
     "e2e:providers": "node scripts/e2e-providers.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@prisma/client": "^6.19.2",
     "@types/express": "^5.0.3",
     "@types/node": "^20.11.0",
@@ -47,10 +49,14 @@
   },
   "devDependencies": {
     "embedded-postgres": "^18.3.0-beta.16",
+    "esbuild": "0.28.1",
     "eslint": "9.39.5",
     "tsx": "^4.23.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
+  },
+  "bin": {
+    "co2router-mcp": "dist/co2router-mcp.mjs"
   }
 }
