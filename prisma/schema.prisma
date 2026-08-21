@@ -63,6 +63,7 @@ model Organization {
   webhookEndpoints WebhookEndpoint[]
   webhookDeliveries WebhookDelivery[]
   runEvents       RunEvent[]
+  x402Settlements X402Settlement[]
 }
 
 model Project {
@@ -78,6 +79,7 @@ model Project {
   policyProfiles PolicyProfile[]
   runs          Run[]
   usageRecords  UsageRecord[]
+  x402Settlements X402Settlement[]
 
   @@unique([organizationId, slug])
 }
@@ -243,11 +245,43 @@ model X402PaymentEvent {
   userAgent       String?
   metadata        Json     @default("{}")
   createdAt       DateTime @default(now())
+  settlementId    String?
+  settlement      X402Settlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
 
   @@index([routePath, createdAt])
   @@index([payer, createdAt])
   @@index([transactionHash])
   @@index([decisionFrameId])
+  @@index([settlementId])
+}
+
+model X402Settlement {
+  id              String   @id @default(cuid())
+  receiptHash     String   @unique
+  version         String
+  routeId         String?
+  routePath       String
+  routeMethod     String
+  priceUsd        Float    @default(0)
+  payer           String?
+  transactionHash String
+  network         String?
+  decisionFrameId String?
+  proofHash       String?
+  organizationId  String?
+  projectId       String?
+  creditQuantity  Float
+  creditUnit      String
+  creditRecorded  Boolean  @default(false)
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  project         Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  paymentEvents   X402PaymentEvent[]
+
+  @@index([transactionHash])
+  @@index([organizationId, createdAt])
+  @@index([routePath, createdAt])
 }
 
 model BillingAccount {
