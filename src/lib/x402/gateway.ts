@@ -4,6 +4,7 @@ import { corsHeaders, json } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
 import { getX402RouteMetaByPath } from '@/lib/x402/routes'
 import { getX402Server, x402GatewayConfigured } from '@/lib/x402/server'
+import { recordX402Settlement } from '@/lib/x402/settlement'
 
 class RequestAdapter implements HTTPAdapter {
   constructor(
@@ -268,26 +269,61 @@ export async function handleX402Request(
     parsedPayload = null
   }
   const ids = extractResponseIds(parsedPayload)
-  await recordPaymentEvent({
-    request,
-    routePath: url.pathname,
-    routeMethod: request.method,
-    status: 'settled',
-    priceUsd: routeMeta?.price ? Number(routeMeta.price.replace('$', '')) : 0,
-    payer: settlement.payer,
-    transaction: settlement.transaction,
-    network: settlement.network,
-    decisionFrameId: ids.decisionFrameId,
-    proofHash: ids.proofHash,
-    upstreamStatus: upstreamResponse.status,
-    metadata: { routeId: routeMeta?.id ?? null },
-  })
+
+  let receipt
+  try {
+    receipt = await recordX402Settlement({
+      routeId: routeMeta?.id ?? null,
+      routePath: url.pathname,
+      routeMethod: request.method,
+      priceUsd: routeMeta?.price ? Number(routeMeta.price.replace('$', '')) : 0,
+      payer: settlement.payer ?? null,
+      transactionHash: settlement.transaction ?? '',
+      network: settlement.network ?? null,
+      decisionFrameId: ids.decisionFrameId,
+      proofHash: ids.proofHash,
+      upstreamStatus: upstreamResponse.status,
+      userAgent: request.headers.get('user-agent'),
+      organizationId: request.headers.get('x-co2router-organization-id'),
+      projectId: request.headers.get('x-co2router-project-id'),
+      creditQuantity: 1,
+      metadata: { routeId: routeMeta?.id ?? null },
+    })
+  } catch (error) {
+    // The payment settled on-chain but the credit could not be recorded. The
+    // caller must be told, otherwise the payer carries unrecorded credit.
+    await recordPaymentEvent({
+      request,
+      routePath: url.pathname,
+      routeMethod: request.method,
+      status: 'settlement_failed',
+      priceUsd: routeMeta?.price ? Number(routeMeta.price.replace('$', '')) : 0,
+      payer: settlement.payer,
+      transaction: settlement.transaction,
+      network: settlement.network,
+      upstreamStatus: upstreamResponse.status,
+      metadata: {
+        stage: 'credit_ledger',
+        error: error instanceof Error ? error.message : 'Unknown settlement ledger error',
+      },
+    })
+    return json(
+      {
+        error: 'x402 payment settled but the credit ledger entry failed',
+        transactionHash: settlement.transaction ?? null,
+        network: settlement.network ?? null,
+      },
+      { status: 500 },
+    )
+  }
 
   const finalHeaders = corsHeaders(responseHeaders)
   for (const [key, value] of Object.entries(settlement.headers)) {
     finalHeaders.set(key, value)
   }
-  finalHeaders.set('x-co2router-x402', 'settled')
+  finalHeaders.set('x-co2router-x402', receipt.replayed ? 'settled-replay' : 'settled')
+  finalHeaders.set('x-co2router-settlement-receipt', receipt.receiptHash)
+  finalHeaders.set('x-co2router-settlement-id', receipt.settlementId)
 
   return new Response(responseBuffer, {
     status: upstreamResponse.status,
