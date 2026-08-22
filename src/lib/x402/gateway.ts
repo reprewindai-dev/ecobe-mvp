@@ -3,7 +3,11 @@ import type { HTTPAdapter, HTTPResponseInstructions } from '@x402/core/http'
 import { corsHeaders, json } from '@/lib/http'
 import { prisma } from '@/lib/prisma'
 import { getX402RouteMetaByPath } from '@/lib/x402/routes'
-import { getX402Server, x402GatewayConfigured } from '@/lib/x402/server'
+import {
+  getX402Server,
+  x402FacilitatorMisconfiguration,
+  x402GatewayConfigured,
+} from '@/lib/x402/server'
 import { recordX402Settlement } from '@/lib/x402/settlement'
 
 class RequestAdapter implements HTTPAdapter {
@@ -157,6 +161,17 @@ export async function handleX402Request(
       {
         error: 'CO2 Router x402 gateway is not configured',
         detail: 'Set CO2ROUTER_PAY_TO in Coolify for the broker service.',
+      },
+      { status: 503 },
+    )
+  }
+
+  const facilitatorIssue = x402FacilitatorMisconfiguration()
+  if (facilitatorIssue) {
+    return json(
+      {
+        error: 'CO2 Router x402 facilitator does not support the configured network',
+        detail: facilitatorIssue,
       },
       { status: 503 },
     )
