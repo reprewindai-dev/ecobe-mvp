@@ -21,6 +21,8 @@ function cleanUrlEnvValue(value: string | undefined) {
   return cleanEnvValue(value).replace(/\/$/, '')
 }
 
+export const DEFAULT_X402_FACILITATOR_URL = 'https://x402.org/facilitator'
+
 export const env = {
   NODE_ENV: cleanEnvValue(process.env.NODE_ENV) || 'development',
   DATABASE_URL: cleanEnvValue(process.env.DATABASE_URL),
@@ -57,10 +59,12 @@ export const env = {
     'eip155:8453',
   CO2ROUTER_X402_FACILITATOR_URL:
     cleanUrlEnvValue(process.env.CO2ROUTER_X402_FACILITATOR_URL) ||
-    'https://x402.org/facilitator',
+    DEFAULT_X402_FACILITATOR_URL,
   CO2ROUTER_X402_FACILITATOR_BEARER_TOKEN: cleanEnvValue(
     process.env.CO2ROUTER_X402_FACILITATOR_BEARER_TOKEN,
   ),
+  CDP_API_KEY_ID: cleanEnvValue(process.env.CDP_API_KEY_ID),
+  CDP_API_KEY_SECRET: cleanEnvValue(process.env.CDP_API_KEY_SECRET),
   CRON_SECRET: cleanEnvValue(process.env.CRON_SECRET),
   SANDBOX_WARM_TOKEN: cleanEnvValue(process.env.SANDBOX_WARM_TOKEN),
   SEKED_URL: cleanUrlEnvValue(process.env.SEKED_URL),
