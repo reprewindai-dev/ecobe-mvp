@@ -91,14 +91,32 @@ export async function verifyPortableOffline(): Promise<PortableOfflineResult> {
     engineRequests += 1
     const host = request.headers.host ?? ''
     if (/co2router\.com/i.test(host)) hostedRequests += 1
-    response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(
-      JSON.stringify({
-        decision: 'REROUTE',
-        selectedRegion: 'ca-qc',
-        proofHash: 'sha256:offline-proof',
-      }),
-    )
+    let raw = ''
+    request.on('data', (chunk) => {
+      raw += chunk
+    })
+    request.on('end', () => {
+      // Mirror the real engine contract: /ci/route requires preferredRegions.
+      let body: { preferredRegions?: unknown } = {}
+      try {
+        body = JSON.parse(raw || '{}')
+      } catch {
+        body = {}
+      }
+      if (!Array.isArray(body.preferredRegions) || body.preferredRegions.length === 0) {
+        response.writeHead(400, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ error: 'preferredRegions is required' }))
+        return
+      }
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(
+        JSON.stringify({
+          decision: 'REROUTE',
+          selectedRegion: 'ca-qc',
+          proofHash: 'sha256:offline-proof',
+        }),
+      )
+    })
   })
 
   try {

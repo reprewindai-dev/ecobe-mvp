@@ -80,6 +80,43 @@ test('calls the mapped private-engine path once and returns its actual result', 
   assert.equal(calls.length, 1)
   assert.equal(calls[0].path, 'ci/route')
   assert.equal(calls[0].method, 'POST')
+  assert.deepEqual(calls[0].body, { preferredRegions: ['ca-qc'], estimatedEnergyKwh: 4.2 })
+})
+
+test('maps every route input onto the engine /ci/route contract', async () => {
+  const { engine, calls } = recordingEngine()
+  await executeMcpTool({
+    name: 'co2router_route',
+    arguments: {
+      workloadId: 'nightly-build',
+      allowedRegions: ['us-east-1', 'eu-west-1'],
+      estimatedEnergyKwh: 12,
+      maxLatencyMs: 250,
+      policy: { tier: 'strict' },
+    },
+    entitlement: entitlement(['route:simulate']),
+    engine,
+  })
+
+  assert.deepEqual(calls[0].body, {
+    preferredRegions: ['us-east-1', 'eu-west-1'],
+    estimatedEnergyKwh: 12,
+    workload: { name: 'nightly-build' },
+    metadata: { maxLatencyMs: 250, policy: { tier: 'strict' } },
+  })
+})
+
+test('rejects zero-energy workloads the engine would refuse', async () => {
+  const { engine, calls } = recordingEngine()
+  const result = await executeMcpTool({
+    name: 'co2router_route',
+    arguments: { allowedRegions: ['ca-qc'], estimatedEnergyKwh: 0 },
+    entitlement: entitlement(['route:simulate']),
+    engine,
+  })
+
+  assert.equal(result.isError, true)
+  assert.equal(calls.length, 0)
 })
 
 test('reports engine failures without claiming success', async () => {

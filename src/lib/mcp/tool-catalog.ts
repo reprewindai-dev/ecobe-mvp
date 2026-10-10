@@ -25,9 +25,16 @@ const routeJsonSchema = {
   properties: {
     workloadId: { type: 'string', minLength: 1 },
     allowedRegions: { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1 },
-    estimatedEnergyKwh: { type: 'number', minimum: 0 },
-    maxLatencyMs: { type: 'number', minimum: 0 },
-    policy: { type: 'object' },
+    estimatedEnergyKwh: { type: 'number', exclusiveMinimum: 0 },
+    maxLatencyMs: {
+      type: 'number',
+      minimum: 0,
+      description: 'Recorded with the decision; not enforced by the engine in this release.',
+    },
+    policy: {
+      type: 'object',
+      description: 'Recorded with the decision; not enforced by the engine in this release.',
+    },
   },
   required: ['allowedRegions', 'estimatedEnergyKwh'],
   additionalProperties: false,
@@ -44,13 +51,28 @@ const routeInput = z
   .object({
     workloadId: z.string().min(1).optional(),
     allowedRegions: z.array(z.string().min(1)).min(1),
-    estimatedEnergyKwh: z.number().nonnegative(),
+    estimatedEnergyKwh: z.number().positive(),
     maxLatencyMs: z.number().nonnegative().optional(),
     policy: z.record(z.unknown()).optional(),
   })
   .strict()
 
 const frameInput = z.object({ frameId: z.string().min(1) }).strict()
+
+// The engine's /ci/route contract names regions `preferredRegions` and silently
+// drops unknown keys, so every MCP field is mapped explicitly.
+export function toEngineRouteBody(input: z.infer<typeof routeInput>) {
+  const metadata: Record<string, unknown> = {}
+  if (input.maxLatencyMs !== undefined) metadata.maxLatencyMs = input.maxLatencyMs
+  if (input.policy !== undefined) metadata.policy = input.policy
+
+  return {
+    preferredRegions: input.allowedRegions,
+    estimatedEnergyKwh: input.estimatedEnergyKwh,
+    ...(input.workloadId ? { workload: { name: input.workloadId } } : {}),
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  }
+}
 
 function framePath(frameId: string, suffix: 'trace' | 'replay') {
   return `ci/decisions/${encodeURIComponent(frameId)}/${suffix}`
@@ -70,7 +92,7 @@ export const CO2_ROUTER_TOOLS = Object.freeze([
     engineRequest: (input: z.infer<typeof routeInput>) => ({
       method: 'POST',
       path: 'ci/route',
-      body: input,
+      body: toEngineRouteBody(input),
     }),
   },
   {
