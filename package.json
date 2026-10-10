@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.55.0",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@prisma/client": "^6.19.2",
     "@types/express": "^5.0.3",
     "@types/node": "^20.11.0",
@@ -36,10 +36,10 @@
     "autoprefixer": "^10.4.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.0",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "16.4.0",
     "express": "^4.22.2",
     "lucide-react": "1.31.0",
-    "next": "16.3.0",
+    "next": "16.4.0",
     "postcss": "^8.5.11",
     "prisma": "^6.19.2",
     "react": "19.2.8",
@@ -60,5 +60,13 @@
   },
   "bin": {
     "co2router-mcp": "dist/co2router-mcp.mjs"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.1": true,
+    "unrs-resolver@1.12.2": true,
+    "@prisma/client@6.19.3": true,
+    "@embedded-postgres/windows-x64@18.3.0-beta.17": true
   }
 }
