@@ -19,6 +19,7 @@
     "prisma:push": "prisma db push",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "happy-path": "node scripts/happy-path.mjs",
+    "demo:live-engine": "npm run build:mcp && tsx scripts/demo-live-engine.ts",
     "e2e:local": "node scripts/e2e-local.mjs",
     "e2e:providers": "node scripts/e2e-providers.mjs"
   },

@@ -35,35 +35,44 @@ const payload: LicensePayload = {
 }
 const signature = sign(null, canonicalizeLicensePayload(payload), privateKey).toString('base64url')
 
-await mkdir(outputDirectory, { recursive: true })
-await Promise.all([
-  writeFile(
-    path.join(outputDirectory, 'license.json'),
-    `${JSON.stringify({ payload, algorithm: 'Ed25519', signature }, null, 2)}\n`,
-    { mode: 0o600 },
-  ),
-  writeFile(
-    path.join(outputDirectory, 'trust-store.json'),
-    `${JSON.stringify(
-      {
-        keys: [
-          {
-            keyId,
-            algorithm: 'Ed25519',
-            publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
-          },
-        ],
-      },
-      null,
-      2,
-    )}\n`,
-    { mode: 0o600 },
-  ),
-  writeFile(
-    path.join(outputDirectory, 'development-private-key.pem'),
-    privateKey.export({ type: 'pkcs8', format: 'pem' }),
-    { mode: 0o600 },
-  ),
-])
+// Wrapped in an async function: tsx compiles this script as CommonJS, which
+// does not support top-level await.
+async function writeEntitlementFiles() {
+  await mkdir(outputDirectory, { recursive: true })
+  await Promise.all([
+    writeFile(
+      path.join(outputDirectory, 'license.json'),
+      `${JSON.stringify({ payload, algorithm: 'Ed25519', signature }, null, 2)}\n`,
+      { mode: 0o600 },
+    ),
+    writeFile(
+      path.join(outputDirectory, 'trust-store.json'),
+      `${JSON.stringify(
+        {
+          keys: [
+            {
+              keyId,
+              algorithm: 'Ed25519',
+              publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+      { mode: 0o600 },
+    ),
+    writeFile(
+      path.join(outputDirectory, 'development-private-key.pem'),
+      privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      { mode: 0o600 },
+    ),
+  ])
 
-console.error(`Development-only entitlement written to ${outputDirectory}`)
+  console.error(`Development-only entitlement written to ${outputDirectory}`)
+}
+
+writeEntitlementFiles().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})
