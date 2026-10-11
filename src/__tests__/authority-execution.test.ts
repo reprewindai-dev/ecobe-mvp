@@ -4,19 +4,19 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import type { AuthorityPayload } from '@/lib/authority/authority-schema'
+import type { AuthorityPayload, ExecutionIntentPayload } from '@/lib/authority/authority-schema'
 import { EvidenceJournal, verifyEvidenceRecords } from '@/lib/authority/evidence-chain'
 import { executeWithAuthority, type TargetAdapter } from '@/lib/authority/executor'
 import { FileNonceStore } from '@/lib/authority/nonce-store'
-import { FencedTargetFixture, IdempotentTargetFixture } from '@/lib/authority/targets'
+import { FencedTargetFixture, GENESIS_STATE_ROOT, IdempotentTargetFixture } from '@/lib/authority/targets'
 
 import {
-  authorityPayload,
   entitlement,
+  intentAndAuthority,
   NOW,
   request,
-  signedAuthority,
   trustedPublicKeys,
+  trustedRequesterKeys,
 } from './helpers/authority-fixture'
 
 async function workspace() {
@@ -30,11 +30,13 @@ async function workspace() {
   }
 }
 
-function b2Adapter(target: IdempotentTargetFixture): TargetAdapter {
+function b2Adapter(target: IdempotentTargetFixture, supportsConditionalMutation = true): TargetAdapter {
   return {
     id: 'batch-scheduler',
     targetClass: 'B2',
-    execute: ({ idempotencyKey, payloadHash }) => target.apply(idempotencyKey, payloadHash),
+    supportsConditionalMutation,
+    execute: ({ idempotencyKey, payloadHash, expectedPreStateRoot, expectedGeneration }) =>
+      target.apply(idempotencyKey, payloadHash, { expectedPreStateRoot, expectedGeneration }),
   }
 }
 
@@ -49,10 +51,20 @@ function b1Adapter(target: FencedTargetFixture): TargetAdapter {
 async function run(
   ws: Awaited<ReturnType<typeof workspace>>,
   adapter: TargetAdapter,
-  overrides: { payload?: Partial<AuthorityPayload>; retry?: boolean; connectivity?: 'CONFIRMED' | 'PARTITIONED' | 'AMBIGUOUS'; human?: boolean; now?: Date } = {},
+  overrides: {
+    intent?: Partial<ExecutionIntentPayload>
+    payload?: Partial<AuthorityPayload>
+    retry?: boolean
+    connectivity?: 'CONFIRMED' | 'PARTITIONED' | 'AMBIGUOUS'
+    human?: boolean
+    now?: Date
+  } = {},
 ) {
+  const pair = intentAndAuthority(overrides.intent, overrides.payload)
   return executeWithAuthority({
-    signedAuthority: signedAuthority(authorityPayload(overrides.payload)),
+    signedIntent: pair.intent,
+    trustedRequesterKeys,
+    signedAuthority: pair.authority,
     trustedAuthorityKeys: trustedPublicKeys,
     entitlement,
     request,
@@ -89,7 +101,11 @@ test('gate 5: expired authority blocks execution without touching the target', a
   const ws = await workspace()
   try {
     const target = await IdempotentTargetFixture.open(ws.targetPath)
-    const result = await run(ws, b2Adapter(target), { now: new Date('2026-10-10T12:30:00.000Z') })
+    // The intent is still valid (until 12:05); only the authority has expired.
+    const result = await run(ws, b2Adapter(target), {
+      payload: { expiresAt: '2026-10-10T12:01:00.000Z' },
+      now: new Date('2026-10-10T12:03:00.000Z'),
+    })
     assert.equal(result.status, 'DENIED')
     assert.equal(result.reason, 'EXPIRED')
     assert.equal(target.mutationCount(), 0)
@@ -118,10 +134,12 @@ test('gate 8: a B1 target rejects a stale writer generation', async () => {
   try {
     const target = new FencedTargetFixture()
     const newer = await run(ws, b1Adapter(target), {
+      intent: { intentId: 'intent-gen-5' },
       payload: { authorityId: 'authority-gen-5', nonce: 'nonce-generation-5-abcdef', fencingGeneration: 5 },
     })
     assert.equal(newer.status, 'EXECUTED')
     const stale = await run(ws, b1Adapter(target), {
+      intent: { intentId: 'intent-gen-4' },
       payload: { authorityId: 'authority-gen-4', nonce: 'nonce-generation-4-abcdef', fencingGeneration: 4 },
     })
     assert.equal(stale.status, 'DENIED')
@@ -129,6 +147,7 @@ test('gate 8: a B1 target rejects a stale writer generation', async () => {
     assert.equal(target.mutationCount(), 1)
 
     const missing = await run(ws, b1Adapter(target), {
+      intent: { intentId: 'intent-no-gen' },
       payload: { authorityId: 'authority-no-gen', nonce: 'nonce-no-generation-abcdef' },
     })
     assert.equal(missing.reason, 'FENCING_GENERATION_REQUIRED')
@@ -198,6 +217,84 @@ test('an ambiguous target response is UNKNOWN and is never blindly retried', asy
     const blind = await run(ws, flaky)
     assert.equal(blind.reason, 'NONCE_REPLAYED')
     assert.equal(calls, 1)
+  } finally {
+    await ws.cleanup()
+  }
+})
+
+test('two signatures: a second authority for an already-executed intent cannot run it again', async () => {
+  const ws = await workspace()
+  try {
+    const target = await IdempotentTargetFixture.open(ws.targetPath)
+    assert.equal((await run(ws, b2Adapter(target))).status, 'EXECUTED')
+    const reissued = await run(ws, b2Adapter(target), {
+      payload: { authorityId: 'authority-reissued', nonce: 'nonce-reissued-0123456789' },
+    })
+    assert.equal(reissued.status, 'DENIED')
+    assert.equal(reissued.reason, 'INTENT_REPLAYED')
+    assert.equal(target.mutationCount(), 1)
+  } finally {
+    await ws.cleanup()
+  }
+})
+
+test('compare-and-set: a change applies only if the target state is what the requester saw', async () => {
+  const ws = await workspace()
+  try {
+    const target = await IdempotentTargetFixture.open(ws.targetPath)
+    const first = await run(ws, b2Adapter(target), {
+      intent: { intentId: 'intent-cas-a', expectedGeneration: 0, expectedPreStateRoot: GENESIS_STATE_ROOT },
+      payload: { authorityId: 'authority-cas-a', nonce: 'nonce-cas-a-0123456789' },
+    })
+    assert.equal(first.status, 'EXECUTED')
+    assert.equal(first.receipt?.generation, 1)
+
+    // Another requester acted on the same stale view: rejected, nothing applied.
+    const staleGeneration = await run(ws, b2Adapter(target), {
+      intent: { intentId: 'intent-cas-b', expectedGeneration: 0, expectedPreStateRoot: GENESIS_STATE_ROOT },
+      payload: { authorityId: 'authority-cas-b', nonce: 'nonce-cas-b-0123456789' },
+    })
+    assert.equal(staleGeneration.reason, 'GENERATION_MISMATCH')
+    const staleRoot = await run(ws, b2Adapter(target), {
+      intent: { intentId: 'intent-cas-c', expectedGeneration: 1, expectedPreStateRoot: GENESIS_STATE_ROOT },
+      payload: { authorityId: 'authority-cas-c', nonce: 'nonce-cas-c-0123456789' },
+    })
+    assert.equal(staleRoot.reason, 'PRE_STATE_MISMATCH')
+    assert.equal(target.mutationCount(), 1)
+
+    // An intent built on the current state applies, and survives a restart.
+    const current = (await IdempotentTargetFixture.open(ws.targetPath)).currentState()
+    assert.equal(current.stateRoot, first.receipt?.postStateRoot)
+    const fresh = await run(ws, b2Adapter(await IdempotentTargetFixture.open(ws.targetPath)), {
+      intent: { intentId: 'intent-cas-d', expectedGeneration: current.generation, expectedPreStateRoot: current.stateRoot },
+      payload: { authorityId: 'authority-cas-d', nonce: 'nonce-cas-d-0123456789' },
+    })
+    assert.equal(fresh.status, 'EXECUTED')
+    assert.equal(fresh.receipt?.generation, 2)
+
+    // A deliberate retry of the first intent is still a DUPLICATE, not a CAS failure.
+    const retry = await run(ws, b2Adapter(await IdempotentTargetFixture.open(ws.targetPath)), {
+      intent: { intentId: 'intent-cas-a', expectedGeneration: 0, expectedPreStateRoot: GENESIS_STATE_ROOT },
+      payload: { authorityId: 'authority-cas-a', nonce: 'nonce-cas-a-0123456789' },
+      retry: true,
+    })
+    assert.equal(retry.status, 'DUPLICATE')
+    assert.equal((await IdempotentTargetFixture.open(ws.targetPath)).mutationCount(), 2)
+  } finally {
+    await ws.cleanup()
+  }
+})
+
+test('compare-and-set: expectations a target cannot enforce are refused, not ignored', async () => {
+  const ws = await workspace()
+  try {
+    const target = await IdempotentTargetFixture.open(ws.targetPath)
+    const result = await run(ws, b2Adapter(target, false), {
+      intent: { expectedGeneration: 0 },
+    })
+    assert.equal(result.status, 'DENIED')
+    assert.equal(result.reason, 'CONDITIONAL_MUTATION_UNSUPPORTED')
+    assert.equal(target.mutationCount(), 0)
   } finally {
     await ws.cleanup()
   }

@@ -17,12 +17,12 @@ Spec section 16 orders migration as: provenance/freshness envelopes (step 3) bef
 | Module | Spec | Purpose |
 |---|---|---|
 | `canonical.ts` | 7, 9 | Canonical JSON: UTF-16 code-unit key order, non-finite numbers rejected, `-0` normalized |
-| `authority-schema.ts` | 7 | Authority envelope: license/tenant/audience, actor/requester, scopes, permitted adapters, target bounds, energy/cost budget, payload hash, policy hash, optional CO2 Router decision binding (`decisionFrameId` + `proofHash`), optional B1 fencing generation, validity window, nonce, issuer key |
-| `authority-verifier.ts` | 7, 12 | Ed25519 verification against a local trust store; requires `authority` edition and `authority:execute` scope; short lifetime (default 15 min); clock tolerance; adapter, target, payload, policy, decision, and budget checks. Fails closed. |
+| `authority-schema.ts` | 7 | Two signed documents. **Execution intent** (requester-signed): tenant, audience, requester principal, operation, adapter, target, payload hash, optional CO2 Router decision, optional compare-and-set expectations (`expectedPreStateRoot`, `expectedGeneration`), validity window, nonce. **Authority envelope** (Authority-signed): license/tenant/audience, actor/requester, scopes, permitted adapters, target bounds, energy/cost budget, payload hash, policy hash, `intentCommitment` (hash of the exact signed intent), optional decision binding, optional B1 fencing generation, validity window, nonce |
+| `authority-verifier.ts` | 7, 12 | `verifyIntent`: requester key must be trusted **and bound to the named principal**; window, tenant, and exact request match. `verifyAuthority`: Ed25519 against a local trust store; `authority` edition and `authority:execute` scope; must commit to the verified intent and name the same requester; short lifetime; adapter, target, payload, policy, decision, and budget checks. Fails closed. |
 | `nonce-store.ts` | 13 | fsync'd append-only nonce journal; durable across restarts for the authority lifetime |
 | `evidence-chain.ts` | 11 | Hash-chained evidence journal (`request -> authority -> execution_attempt -> target_ack -> outcome`); verification recomputes every hash and link; Ed25519-signed witness root; restore a lost journal only from records that verify against a trusted witness |
-| `targets.ts` | 8 | B1 fencing fixture, durable B2 idempotent fixture, Class C autonomy rule |
-| `executor.ts` | 8, 12 | verify -> autonomy rule -> consume nonce -> record attempt -> touch target. Ambiguous responses are `UNKNOWN`, never blindly retried; explicit retries only for B2 |
+| `targets.ts` | 8 | B1 fencing fixture; durable B2 fixture with idempotency keyed on the intent and compare-and-set on state root + generation (idempotency checked first, so retries stay `DUPLICATE`); Class C autonomy rule |
+| `executor.ts` | 8, 12 | verify intent -> verify authority against it -> autonomy rule -> refuse CAS expectations the adapter cannot enforce -> consume authority nonce **and** intent -> record attempt -> touch target. A re-issued authority cannot re-run an executed intent. Ambiguous responses are `UNKNOWN`, never blindly retried; explicit retries only for B2 |
 
 ## Acceptance gates covered
 
@@ -34,6 +34,8 @@ Spec section 16 orders migration as: provenance/freshness envelopes (step 3) bef
 | 8. B1 stale generation rejected | `authority-execution` |
 | 9. B2 duplicate: one mutation, deterministic receipt, across restarts | `authority-execution` |
 | 10. Class C cannot execute autonomously during partition | `authority-execution` |
+| Two signatures: forged/foreign/mismatched intents rejected; authority approves only its committed intent; re-issued authority cannot re-run an intent | `authority-verifier`, `authority-execution` |
+| Compare-and-set: stale generation or state root rejected; unenforceable expectations refused | `authority-execution` |
 
 Each guard was checked by disabling it and confirming a test fails.
 
@@ -59,6 +61,7 @@ The design ports concepts from the VChip/CAPPO prototypes (Veklom), reimplemente
 | Issuer key regenerated on each restart | Keys come from a configured trust store |
 | Sink skipped signature checks when no key was configured (fail open) | Verification is unconditional; missing trust fails closed |
 | Batch budget counted operations | Single-use authority; budget bounds energy and cost |
+| VirtualDB's VFRAC-1 intent/attestation and CAS fields existed only as data shapes (admission check was simulated) | Requester-signed intent + Authority commitment, and compare-and-set, implemented and enforced |
 
 ## Proof of benefit is a separate track
 

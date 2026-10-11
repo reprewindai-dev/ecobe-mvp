@@ -2,7 +2,16 @@ import { createPublicKey, verify } from 'node:crypto'
 
 import type { VerifiedEntitlement } from '@/lib/license/license-schema'
 
-import { type AuthorityPayload, SignedAuthoritySchema, type VerifiedAuthority } from './authority-schema'
+import {
+  type AuthorityPayload,
+  type ExecutionIntentPayload,
+  type RequesterKey,
+  SignedAuthoritySchema,
+  type SignedIntent,
+  SignedIntentSchema,
+  type VerifiedAuthority,
+  type VerifiedIntent,
+} from './authority-schema'
 import { canonicalHash, canonicalJsonBytes } from './canonical'
 
 export const EXECUTE_SCOPE = 'authority:execute'
@@ -27,6 +36,15 @@ export type AuthorityErrorCode =
   | 'DECISION_MISMATCH'
   | 'BUDGET_ESTIMATE_REQUIRED'
   | 'BUDGET_EXCEEDED'
+  | 'INVALID_INTENT'
+  | 'UNKNOWN_REQUESTER_KEY'
+  | 'REQUESTER_KEY_MISMATCH'
+  | 'INVALID_INTENT_SIGNATURE'
+  | 'INTENT_NOT_YET_VALID'
+  | 'INTENT_EXPIRED'
+  | 'INTENT_LIFETIME_TOO_LONG'
+  | 'INTENT_MISMATCH'
+  | 'INTENT_COMMITMENT_MISMATCH'
 
 export class AuthorityVerificationError extends Error {
   constructor(
@@ -54,6 +72,17 @@ export type VerifyAuthorityInput = {
   trustedPublicKeys: ReadonlyMap<string, string>
   entitlement: VerifiedEntitlement
   request: AuthorityRequest
+  intent: VerifiedIntent
+  now?: Date
+  maxLifetimeMs?: number
+  clockToleranceMs?: number
+}
+
+export type VerifyIntentInput = {
+  signedIntent: unknown
+  trustedRequesterKeys: ReadonlyMap<string, RequesterKey>
+  entitlement: VerifiedEntitlement
+  request: AuthorityRequest
   now?: Date
   maxLifetimeMs?: number
   clockToleranceMs?: number
@@ -61,6 +90,90 @@ export type VerifyAuthorityInput = {
 
 export function canonicalizeAuthorityPayload(payload: AuthorityPayload): Buffer {
   return canonicalJsonBytes(payload)
+}
+
+export function canonicalizeIntentPayload(payload: ExecutionIntentPayload): Buffer {
+  return canonicalJsonBytes(payload)
+}
+
+// Commits to the whole signed intent, signature included, so an authority
+// approves exactly one signed request.
+export function intentCommitmentFor(signedIntent: SignedIntent): string {
+  return canonicalHash(signedIntent)
+}
+
+function verifyEd25519(message: Buffer, publicKeyPem: string, signature: string): boolean {
+  return verify(null, message, createPublicKey(publicKeyPem), Buffer.from(signature, 'base64url'))
+}
+
+function checkWindow(
+  window: { issuedAt: string; notBefore: string; expiresAt: string },
+  now: Date,
+  toleranceMs: number,
+  maxLifetimeMs: number,
+  codes: { notYetValid: AuthorityErrorCode; expired: AuthorityErrorCode; tooLong: AuthorityErrorCode },
+) {
+  const notBefore = Date.parse(window.notBefore)
+  const expiresAt = Date.parse(window.expiresAt)
+  if (now.getTime() + toleranceMs < notBefore) fail(codes.notYetValid, 'Not active yet')
+  if (now.getTime() - toleranceMs > expiresAt) fail(codes.expired, 'Has expired')
+  if (expiresAt - Date.parse(window.issuedAt) > maxLifetimeMs) {
+    fail(codes.tooLong, 'Lifetime exceeds the short-lived maximum')
+  }
+}
+
+// First signature: the requester's intent. The key must be trusted and bound
+// to the principal named in the intent, and the intent must describe exactly
+// the request about to execute.
+export function verifyIntent(input: VerifyIntentInput): VerifiedIntent {
+  const parsed = SignedIntentSchema.safeParse(input.signedIntent)
+  if (!parsed.success) fail('INVALID_INTENT', 'Execution intent is invalid', { cause: parsed.error })
+
+  const { payload, signature, algorithm } = parsed.data
+  const requesterKey = input.trustedRequesterKeys.get(payload.signerKeyId)
+  if (!requesterKey) fail('UNKNOWN_REQUESTER_KEY', 'Intent signer key is not trusted')
+  if (requesterKey.principal !== payload.requester) {
+    fail('REQUESTER_KEY_MISMATCH', 'Intent signer key is not bound to the named requester')
+  }
+
+  let authentic = false
+  try {
+    authentic = verifyEd25519(canonicalizeIntentPayload(payload), requesterKey.publicKeyPem, signature)
+  } catch (error) {
+    fail('INVALID_INTENT_SIGNATURE', 'Intent signature is invalid', { cause: error })
+  }
+  if (!authentic) fail('INVALID_INTENT_SIGNATURE', 'Intent signature is invalid')
+
+  const { entitlement, request } = input
+  if (payload.customerOrTenant !== entitlement.customerOrTenant || payload.audience !== entitlement.audience) {
+    fail('INTENT_MISMATCH', 'Intent is not for this tenant and installation')
+  }
+
+  const now = input.now ?? new Date()
+  checkWindow(
+    payload,
+    now,
+    input.clockToleranceMs ?? DEFAULT_CLOCK_TOLERANCE_MS,
+    input.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS,
+    { notYetValid: 'INTENT_NOT_YET_VALID', expired: 'INTENT_EXPIRED', tooLong: 'INTENT_LIFETIME_TOO_LONG' },
+  )
+
+  if (
+    payload.adapter !== request.adapter ||
+    payload.targetResource !== request.targetResource ||
+    payload.payloadHash !== hashAuthorityRequestPayload(request.payload) ||
+    payload.decision?.decisionFrameId !== request.decision?.decisionFrameId ||
+    payload.decision?.proofHash !== request.decision?.proofHash
+  ) {
+    fail('INTENT_MISMATCH', 'Request does not match the signed intent')
+  }
+
+  return Object.freeze({
+    ...payload,
+    algorithm,
+    intentCommitment: intentCommitmentFor(parsed.data),
+    verifiedAt: now.toISOString(),
+  })
 }
 
 export function hashAuthorityRequestPayload(payload: unknown): string {
@@ -91,18 +204,19 @@ export function verifyAuthority(input: VerifyAuthorityInput): VerifiedAuthority 
 
   let authentic = false
   try {
-    authentic = verify(
-      null,
-      canonicalizeAuthorityPayload(payload),
-      createPublicKey(publicKeyPem),
-      Buffer.from(signature, 'base64url'),
-    )
+    authentic = verifyEd25519(canonicalizeAuthorityPayload(payload), publicKeyPem, signature)
   } catch (error) {
     fail('INVALID_SIGNATURE', 'Authority signature is invalid', { cause: error })
   }
   if (!authentic) fail('INVALID_SIGNATURE', 'Authority signature is invalid')
 
-  const { entitlement, request } = input
+  const { entitlement, request, intent } = input
+  if (payload.intentCommitment !== intent.intentCommitment) {
+    fail('INTENT_COMMITMENT_MISMATCH', 'Authority does not approve this signed intent')
+  }
+  if (payload.requester !== intent.requester) {
+    fail('INTENT_COMMITMENT_MISMATCH', 'Authority requester does not match the intent signer')
+  }
   if (entitlement.edition !== 'authority') {
     fail('EDITION_NOT_AUTHORITY', 'License edition does not include Authority execution')
   }
@@ -117,14 +231,13 @@ export function verifyAuthority(input: VerifyAuthorityInput): VerifiedAuthority 
   }
 
   const now = input.now ?? new Date()
-  const tolerance = input.clockToleranceMs ?? DEFAULT_CLOCK_TOLERANCE_MS
-  const notBefore = Date.parse(payload.notBefore)
-  const expiresAt = Date.parse(payload.expiresAt)
-  if (now.getTime() + tolerance < notBefore) fail('NOT_YET_VALID', 'Authority is not active yet')
-  if (now.getTime() - tolerance > expiresAt) fail('EXPIRED', 'Authority has expired')
-  if (expiresAt - Date.parse(payload.issuedAt) > (input.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS)) {
-    fail('LIFETIME_TOO_LONG', 'Authority lifetime exceeds the short-lived maximum')
-  }
+  checkWindow(
+    payload,
+    now,
+    input.clockToleranceMs ?? DEFAULT_CLOCK_TOLERANCE_MS,
+    input.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS,
+    { notYetValid: 'NOT_YET_VALID', expired: 'EXPIRED', tooLong: 'LIFETIME_TOO_LONG' },
+  )
 
   if (!payload.permittedAdapters.includes(request.adapter)) {
     fail('ADAPTER_NOT_PERMITTED', `Adapter ${request.adapter} is not permitted`)

@@ -2,6 +2,71 @@ import { z } from 'zod'
 
 const sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/, 'must be a lowercase SHA-256 hex digest')
 
+const decisionBindingSchema = z
+  .object({
+    decisionFrameId: z.string().min(1),
+    proofHash: sha256HexSchema,
+  })
+  .strict()
+
+function validityWindow(payload: { notBefore: string; expiresAt: string }, context: z.RefinementCtx) {
+  if (Date.parse(payload.expiresAt) <= Date.parse(payload.notBefore)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'expiresAt must be after notBefore',
+      path: ['expiresAt'],
+    })
+  }
+}
+
+// Requester-signed execution intent: the first of two signatures. The
+// Authority envelope commits to the hash of this exact signed intent, so who
+// asked and who approved stay cryptographically separate.
+export const ExecutionIntentPayloadSchema = z
+  .object({
+    intentId: z.string().min(1),
+    customerOrTenant: z.string().min(1),
+    audience: z.string().min(1),
+    requester: z.string().min(1),
+    operation: z.string().min(1),
+    adapter: z.string().min(1),
+    targetResource: z.string().min(1),
+    payloadHash: sha256HexSchema,
+    decision: decisionBindingSchema.optional(),
+    // Compare-and-set expectations: the target state the requester observed.
+    expectedPreStateRoot: sha256HexSchema.optional(),
+    expectedGeneration: z.number().int().nonnegative().optional(),
+    issuedAt: z.string().datetime(),
+    notBefore: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    nonce: z.string().min(16),
+    signerKeyId: z.string().min(1),
+  })
+  .strict()
+  .superRefine(validityWindow)
+
+export const SignedIntentSchema = z
+  .object({
+    payload: ExecutionIntentPayloadSchema,
+    algorithm: z.literal('Ed25519'),
+    signature: z.string().min(1),
+  })
+  .strict()
+
+export type ExecutionIntentPayload = z.infer<typeof ExecutionIntentPayloadSchema>
+export type SignedIntent = z.infer<typeof SignedIntentSchema>
+
+export type VerifiedIntent = Readonly<
+  ExecutionIntentPayload & {
+    algorithm: 'Ed25519'
+    intentCommitment: string
+    verifiedAt: string
+  }
+>
+
+// A requester key is bound to one principal so a key cannot sign as another.
+export type RequesterKey = { principal: string; publicKeyPem: string }
+
 // Authority envelope fields from the locked portable-authority spec, section 7.
 export const AuthorityPayloadSchema = z
   .object({
@@ -28,14 +93,10 @@ export const AuthorityPayloadSchema = z
     approvalPolicyId: z.string().min(1),
     payloadHash: sha256HexSchema,
     policyHash: sha256HexSchema,
+    // Second signature: commits to the hash of the exact signed intent.
+    intentCommitment: sha256HexSchema,
     // Optional binding to the CO2 Router decision this authority executes.
-    decision: z
-      .object({
-        decisionFrameId: z.string().min(1),
-        proofHash: sha256HexSchema,
-      })
-      .strict()
-      .optional(),
+    decision: decisionBindingSchema.optional(),
     // Writer generation for Class B1 (fencing) targets.
     fencingGeneration: z.number().int().nonnegative().optional(),
     issuedAt: z.string().datetime(),
@@ -51,13 +112,7 @@ export const AuthorityPayloadSchema = z
         context.addIssue({ code: z.ZodIssueCode.custom, message: `${field} must be unique`, path: [field] })
       }
     }
-    if (Date.parse(payload.expiresAt) <= Date.parse(payload.notBefore)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'expiresAt must be after notBefore',
-        path: ['expiresAt'],
-      })
-    }
+    validityWindow(payload, context)
   })
 
 export const SignedAuthoritySchema = z
