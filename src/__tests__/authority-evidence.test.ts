@@ -112,3 +112,30 @@ test('rejects a forged witness: bad signature, untrusted key, or a corrupted hea
     await fixture.cleanup()
   }
 })
+
+test('rejects rollback to an older, genuinely signed snapshot using an external high-water mark', async () => {
+  const fixture = await journalWithRecords()
+  try {
+    const all = [...fixture.journal.all()]
+    const olderRecords = all.slice(0, 2)
+    const olderWitness = signWitnessRoot(olderRecords, 'witness-key-1', witnessPrivatePem, NOW)
+    const highWaterMark = all.length
+
+    // The older snapshot is authentic, so only the high-water mark can catch it.
+    await unlink(fixture.journalPath)
+    await assert.rejects(
+      EvidenceJournal.restore(fixture.journalPath, olderRecords, olderWitness, trustedWitnessKeys, {
+        minimumSequence: highWaterMark,
+      }),
+      EvidenceIntegrityError,
+    )
+
+    const currentWitness = signWitnessRoot(all, 'witness-key-1', witnessPrivatePem, NOW)
+    const restored = await EvidenceJournal.restore(fixture.journalPath, all, currentWitness, trustedWitnessKeys, {
+      minimumSequence: highWaterMark,
+    })
+    assert.equal(restored.all().length, highWaterMark)
+  } finally {
+    await fixture.cleanup()
+  }
+})

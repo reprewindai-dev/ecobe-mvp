@@ -6,7 +6,7 @@ import test from 'node:test'
 
 import type { AuthorityPayload, ExecutionIntentPayload } from '@/lib/authority/authority-schema'
 import { EvidenceJournal, verifyEvidenceRecords } from '@/lib/authority/evidence-chain'
-import { executeWithAuthority, type TargetAdapter } from '@/lib/authority/executor'
+import { executeWithAuthority, reconcileUnknownOutcome, type TargetAdapter } from '@/lib/authority/executor'
 import { FileNonceStore } from '@/lib/authority/nonce-store'
 import { FencedTargetFixture, GENESIS_STATE_ROOT, IdempotentTargetFixture } from '@/lib/authority/targets'
 
@@ -295,6 +295,89 @@ test('compare-and-set: expectations a target cannot enforce are refused, not ign
     assert.equal(result.status, 'DENIED')
     assert.equal(result.reason, 'CONDITIONAL_MUTATION_UNSUPPORTED')
     assert.equal(target.mutationCount(), 0)
+  } finally {
+    await ws.cleanup()
+  }
+})
+
+test('revocation at execution time stops already-issued authorities', async () => {
+  const ws = await workspace()
+  try {
+    const target = await IdempotentTargetFixture.open(ws.targetPath)
+    const cases = [
+      [{ authorityIds: new Set(['authority-1']) }, 'AUTHORITY_REVOKED'],
+      [{ issuerKeyIds: new Set(['authority-key-1']) }, 'ISSUER_KEY_REVOKED'],
+      [{ requesterKeyIds: new Set(['requester-key-1']) }, 'REQUESTER_KEY_REVOKED'],
+    ] as const
+    for (const [revocations, reason] of cases) {
+      const pair = intentAndAuthority()
+      const result = await executeWithAuthority({
+        signedIntent: pair.intent,
+        trustedRequesterKeys,
+        signedAuthority: pair.authority,
+        trustedAuthorityKeys: trustedPublicKeys,
+        entitlement,
+        request,
+        adapter: b2Adapter(target),
+        connectivity: 'CONFIRMED',
+        revocations,
+        nonceStore: await FileNonceStore.open(ws.noncePath, NOW),
+        evidence: await EvidenceJournal.open(ws.evidencePath),
+        now: NOW,
+      })
+      assert.equal(result.status, 'DENIED')
+      assert.equal(result.reason, reason)
+    }
+    assert.equal(target.mutationCount(), 0)
+    // Revocations are checked before nonces are consumed, so the authority
+    // still executes once the revocation is lifted.
+    assert.equal((await run(ws, b2Adapter(target))).status, 'EXECUTED')
+  } finally {
+    await ws.cleanup()
+  }
+})
+
+test('reconciliation resolves UNKNOWN from the target record, and stays UNKNOWN if it cannot ask', async () => {
+  const ws = await workspace()
+  try {
+    const target = await IdempotentTargetFixture.open(ws.targetPath)
+    // The target commits, but the acknowledgement is lost on the way back.
+    const lostAck: TargetAdapter = {
+      ...b2Adapter(target),
+      execute: async (args) => {
+        await target.apply(args.idempotencyKey, args.payloadHash)
+        throw new Error('connection reset after commit')
+      },
+      lookup: (key) => target.lookup(key),
+    }
+    const unknown = await run(ws, lostAck)
+    assert.equal(unknown.status, 'UNKNOWN')
+
+    const evidence = await EvidenceJournal.open(ws.evidencePath)
+    const attempt = evidence.all().find((record) => record.type === 'execution_attempt')
+    const idempotencyKey = String(attempt?.data.idempotencyKey)
+    const ids = { authorityId: unknown.authorityId, intentId: unknown.intentId }
+
+    const resolved = await reconcileUnknownOutcome({ adapter: lostAck, idempotencyKey, ids, evidence, now: NOW })
+    assert.equal(resolved.status, 'RECONCILED_EXECUTED')
+    assert.equal(resolved.receipt?.receiptHash, (await target.lookup(idempotencyKey) as { receiptHash: string }).receiptHash)
+
+    const notApplied = await reconcileUnknownOutcome({ adapter: lostAck, idempotencyKey: 'f'.repeat(64), ids, evidence, now: NOW })
+    assert.equal(notApplied.status, 'RECONCILED_NOT_APPLIED')
+
+    // An unreachable target never turns into "not committed".
+    const unreachable = await reconcileUnknownOutcome({
+      adapter: { ...lostAck, lookup: async () => { throw new Error('target unreachable') } },
+      idempotencyKey,
+      ids,
+      evidence,
+      now: NOW,
+    })
+    assert.equal(unreachable.status, 'UNKNOWN')
+    const noLookup = await reconcileUnknownOutcome({ adapter: b2Adapter(target), idempotencyKey, ids, evidence, now: NOW })
+    assert.equal(noLookup.status, 'UNKNOWN')
+    assert.equal(target.mutationCount(), 1)
+    assert.equal(verifyEvidenceRecords(evidence.all()), evidence.headHash())
   } finally {
     await ws.cleanup()
   }

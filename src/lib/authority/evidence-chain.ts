@@ -178,14 +178,23 @@ export class EvidenceJournal {
   }
 
   // Rebuilds a lost journal from exported records, accepting them only if they
-  // verify against a trusted witness root.
+  // verify against a trusted witness root. A genuine but older witness would
+  // also verify, so callers pass the high-water mark (last known sequence)
+  // kept outside the journal to reject rollback to an older snapshot.
   static async restore(
     journalPath: string,
     records: readonly EvidenceRecord[],
     witness: WitnessRoot,
     trustedPublicKeys: ReadonlyMap<string, string>,
+    options: { minimumSequence?: number } = {},
   ): Promise<EvidenceJournal> {
     verifyWitnessedEvidence(records, witness, trustedPublicKeys)
+    if (options.minimumSequence !== undefined && witness.sequence < options.minimumSequence) {
+      throw new EvidenceIntegrityError(
+        `Witness sequence ${witness.sequence} is older than the recorded high-water mark ${options.minimumSequence}`,
+        witness.sequence,
+      )
+    }
     await mkdir(path.dirname(journalPath), { recursive: true })
     const temporaryPath = `${journalPath}.restore-${process.pid}`
     const handle = await open(temporaryPath, 'w')

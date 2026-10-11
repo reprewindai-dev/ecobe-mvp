@@ -30,6 +30,17 @@ export type TargetAdapter = {
     expectedPreStateRoot?: string
     expectedGeneration?: number
   }): Promise<TargetReceipt>
+  // Asks the target whether an idempotency key committed, to resolve UNKNOWN
+  // outcomes from the target's own record rather than by blind retry.
+  lookup?(idempotencyKey: string): Promise<TargetReceipt | 'NOT_FOUND'>
+}
+
+// Revocations checked at execution time: revoking an authority, requester key,
+// or issuer key stops already-issued, unspent authorities from executing.
+export type Revocations = {
+  authorityIds?: ReadonlySet<string>
+  requesterKeyIds?: ReadonlySet<string>
+  issuerKeyIds?: ReadonlySet<string>
 }
 
 export type ExecutionStatus = 'EXECUTED' | 'DUPLICATE' | 'DENIED' | 'UNKNOWN'
@@ -58,6 +69,7 @@ export type ExecuteWithAuthorityInput = {
   // Deliberate retry of an already-consumed intent/authority. Only Class B2
   // targets accept it, because their idempotency key makes a repeat at-most-once.
   retry?: boolean
+  revocations?: Revocations
   nonceStore: NonceStore
   evidence: EvidenceJournal
   now?: Date
@@ -122,6 +134,11 @@ export async function executeWithAuthority(input: ExecuteWithAuthorityInput): Pr
     throw error
   }
   const ids = { authorityId: authority.authorityId, intentId: intent.intentId }
+
+  const revoked = input.revocations
+  if (revoked?.authorityIds?.has(authority.authorityId)) return deny('AUTHORITY_REVOKED', ids)
+  if (revoked?.issuerKeyIds?.has(authority.issuerKeyId)) return deny('ISSUER_KEY_REVOKED', ids)
+  if (revoked?.requesterKeyIds?.has(intent.signerKeyId)) return deny('REQUESTER_KEY_REVOKED', ids)
 
   await input.evidence.append(
     'authority',
@@ -219,4 +236,52 @@ export async function executeWithAuthority(input: ExecuteWithAuthorityInput): Pr
     now,
   )
   return { status, reason: receipt.reason, ...ids, receipt, evidenceHead: input.evidence.headHash() }
+}
+
+export type ReconcileStatus = 'RECONCILED_EXECUTED' | 'RECONCILED_NOT_APPLIED' | 'UNKNOWN'
+
+// Resolves an UNKNOWN outcome by asking the target whether the idempotency key
+// committed. Only the target's own answer changes the outcome: if it cannot be
+// asked or does not answer, the outcome stays UNKNOWN (never "not committed").
+export async function reconcileUnknownOutcome(input: {
+  adapter: TargetAdapter
+  idempotencyKey: string
+  ids: { authorityId?: string; intentId?: string }
+  evidence: EvidenceJournal
+  now?: Date
+}): Promise<{ status: ReconcileStatus; receipt?: TargetReceipt }> {
+  const now = input.now ?? new Date()
+  let answer: TargetReceipt | 'NOT_FOUND'
+  try {
+    if (!input.adapter.lookup) throw new Error('Target does not support outcome lookup')
+    answer = await input.adapter.lookup(input.idempotencyKey)
+  } catch (error) {
+    await input.evidence.append(
+      'outcome',
+      {
+        status: 'UNKNOWN',
+        ...input.ids,
+        reason: 'RECONCILIATION_UNAVAILABLE',
+        detail: error instanceof Error ? error.message : 'Unknown lookup error',
+      },
+      now,
+    )
+    return { status: 'UNKNOWN' }
+  }
+
+  if (answer === 'NOT_FOUND') {
+    await input.evidence.append(
+      'outcome',
+      { status: 'RECONCILED_NOT_APPLIED', ...input.ids, idempotencyKey: input.idempotencyKey },
+      now,
+    )
+    return { status: 'RECONCILED_NOT_APPLIED' }
+  }
+  await input.evidence.append('target_ack', { ...input.ids, ...answer, reconciled: true }, now)
+  await input.evidence.append(
+    'outcome',
+    { status: 'RECONCILED_EXECUTED', ...input.ids, receiptHash: answer.receiptHash },
+    now,
+  )
+  return { status: 'RECONCILED_EXECUTED', receipt: answer }
 }

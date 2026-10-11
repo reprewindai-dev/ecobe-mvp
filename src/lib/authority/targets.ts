@@ -133,6 +133,21 @@ export class IdempotentTargetFixture {
     return { generation: this.generation, stateRoot: this.stateRoot }
   }
 
+  // Reports whether a key committed, returning the same receipt the original
+  // apply produced, so a reconciled outcome is identical to an acknowledged one.
+  async lookup(key: string): Promise<TargetReceipt | 'NOT_FOUND'> {
+    const commit = this.commits.get(key)
+    if (!commit) return 'NOT_FOUND'
+    return receipt({
+      targetClass: 'B2',
+      outcome: 'APPLIED',
+      key,
+      mutationSequence: commit.mutationSequence,
+      generation: commit.generation,
+      postStateRoot: commit.postStateRoot,
+    })
+  }
+
   apply(key: string, payloadHash: string, expectations: ConditionalExpectations = {}): Promise<TargetReceipt> {
     const run = async (): Promise<TargetReceipt> => {
       const rejected = (reason: string) =>
