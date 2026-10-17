@@ -5,7 +5,14 @@ import type { TargetReceipt } from '../targets'
 export type CappoClientConfig = {
   baseUrl: string
   mountId: string
+  tokenId?: string
+  tokenNonce?: string
   bearerToken?: string
+  apiKey?: string
+  workspaceId?: string
+  targetRef?: string
+  action?: string
+  resource?: string
 }
 
 export type CappoExecutePayload = {
@@ -16,6 +23,7 @@ export type CappoExecutePayload = {
   resource: string
   arguments: Record<string, unknown>
   operation_id: string
+  authority_epoch: number
 }
 
 /**
@@ -32,12 +40,26 @@ export class CappoTargetAdapter implements TargetAdapter {
 
   private readonly baseUrl: string
   private readonly mountId: string
+  private readonly tokenId?: string
+  private readonly tokenNonce?: string
   private readonly bearerToken?: string
+  private readonly apiKey?: string
+  private readonly workspaceId?: string
+  private readonly targetRef?: string
+  private readonly action?: string
+  private readonly resource?: string
 
   constructor(config: CappoClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
     this.mountId = config.mountId
+    this.tokenId = config.tokenId
+    this.tokenNonce = config.tokenNonce
     this.bearerToken = config.bearerToken
+    this.apiKey = config.apiKey
+    this.workspaceId = config.workspaceId
+    this.targetRef = config.targetRef
+    this.action = config.action
+    this.resource = config.resource
   }
 
   async execute(input: {
@@ -63,22 +85,29 @@ export class CappoTargetAdapter implements TargetAdapter {
       'Content-Type': 'application/json',
       'X-Authority-Epoch': String(generation),
     }
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey
+    }
     if (this.bearerToken) {
       headers.Authorization = `Bearer ${this.bearerToken}`
     }
+    if (this.workspaceId) {
+      headers['X-Workspace-ID'] = this.workspaceId
+    }
 
     const payload: CappoExecutePayload = {
-      token_id: `token-${input.idempotencyKey.slice(0, 16)}`,
-      nonce: input.idempotencyKey.slice(16, 48),
-      action: 'record.create',
-      target_ref: 'veklom.local-records@v1',
-      resource: `co2router-${input.payloadHash.slice(0, 16)}`,
+      token_id: this.tokenId ?? `token-${input.idempotencyKey.slice(0, 16)}`,
+      nonce: this.tokenNonce ?? input.idempotencyKey.slice(16, 48),
+      action: this.action ?? 'record.create',
+      target_ref: this.targetRef ?? 'veklom.local-records@v1',
+      resource: this.resource ?? `co2router-${input.payloadHash.slice(0, 16)}`,
       arguments: {
         idempotencyKey: input.idempotencyKey,
         payloadHash: input.payloadHash,
         fencingGeneration: generation,
       },
       operation_id: `op-${input.idempotencyKey}`,
+      authority_epoch: generation,
     }
 
     let response: Response

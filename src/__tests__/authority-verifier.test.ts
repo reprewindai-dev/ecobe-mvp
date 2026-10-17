@@ -101,6 +101,12 @@ test('enforces adapter, target, lifetime, decision binding, and budget bounds', 
   rejectsWith('DECISION_MISMATCH', () =>
     verifyWith({ request: { decision: { ...decision, decisionFrameId: 'frame-2' } } }),
   )
+  rejectsWith('DECISION_REQUIRED', () =>
+    verifyWith({
+      signedAuthority: signed(authorityPayload({ decision: undefined, permittedAdapters: ['veklom-cappo-adapter'] })),
+      request: { adapter: 'veklom-cappo-adapter' },
+    }),
+  )
   rejectsWith('BUDGET_EXCEEDED', () => verifyWith({ request: { estimatedEnergyKwh: 25 } }))
   rejectsWith('BUDGET_ESTIMATE_REQUIRED', () => verifyWith({ request: { estimatedEnergyKwh: undefined } }))
 })

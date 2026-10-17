@@ -34,6 +34,7 @@ export type AuthorityErrorCode =
   | 'PAYLOAD_MISMATCH'
   | 'POLICY_MISMATCH'
   | 'DECISION_MISMATCH'
+  | 'DECISION_REQUIRED'
   | 'BUDGET_ESTIMATE_REQUIRED'
   | 'BUDGET_EXCEEDED'
   | 'INVALID_INTENT'
@@ -250,6 +251,12 @@ export function verifyAuthority(input: VerifyAuthorityInput): VerifiedAuthority 
   }
   if (request.policyHash !== payload.policyHash) {
     fail('POLICY_MISMATCH', 'Active policy does not match the authorized policy hash')
+  }
+  if (
+    !payload.decision &&
+    (request.adapter === 'veklom-cappo-adapter' || payload.scopes.includes('environmental:gate'))
+  ) {
+    fail('DECISION_REQUIRED', 'Environmental decision binding is mandatory for this target adapter')
   }
   if (
     payload.decision &&
