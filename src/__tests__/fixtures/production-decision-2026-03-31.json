@@ -1,0 +1,53 @@
+{
+  "decisionFrameId": "9e663658-ce6a-4bd5-a81e-c481eeffdee8",
+  "decision": "run_now",
+  "reasonCode": "ALLOW",
+  "selectedRegion": "us-west-2",
+  "signalMode": "marginal",
+  "fallbackUsed": false,
+  "signalConfidence": 0.875,
+  "doctrineVersion": "co2_router_doctrine_v1",
+  "proofEnvelope": {
+    "proofHash": "c6aec8e8faf8f7a49054376adfcfbb8338c8175191e7f72dba3229cb8bfa62b5"
+  },
+  "baseline": {
+    "region": "us-west-2",
+    "carbonIntensity": 29
+  },
+  "workflowOutputs": {
+    "carbonIntensity": 29,
+    "carbonBaseline": 29,
+    "carbonReductionPct": 0
+  },
+  "decisionEnvelope": {
+    "timing": {
+      "notBefore": null,
+      "expiresAt": "2026-03-31T00:27:50.198Z"
+    }
+  },
+  "mss": {
+    "carbonProvider": "REDIS_CACHE_WATTTIME_MOER"
+  },
+  "candidateEvaluations": [
+    {
+      "region": "us-west-2",
+      "carbonIntensity": 29,
+      "guardrailCandidateBlocked": false,
+      "guardrailReasons": []
+    },
+    {
+      "region": "us-east-1",
+      "carbonIntensity": 77,
+      "guardrailCandidateBlocked": false,
+      "guardrailReasons": [
+        "WATER_HIGH_STRESS"
+      ]
+    },
+    {
+      "region": "eu-west-1",
+      "carbonIntensity": 400,
+      "guardrailCandidateBlocked": false,
+      "guardrailReasons": []
+    }
+  ]
+}
