@@ -144,6 +144,48 @@ test(
     assert.equal(applied.length, 1, `Expected exactly 1 APPLIED in 20-way storm, got ${applied.length}`)
     assert.equal(rejected.length, 19, `Expected 19 REJECTED in 20-way storm, got ${rejected.length}`)
 
+    // 4. Bare advance-epoch refuses stale holder even when authority_epoch is omitted
+    const mBare = await mountInA()
+    const advRes = await fetch(`${BASE}/v1/capability/mounts/${mBare.id}/advance-epoch`, {
+      method: 'POST',
+      headers: headersA,
+    })
+    assert.equal(advRes.status, 200)
+    const omitRes = await fetch(`${BASE}/v1/capability/mounts/${mBare.id}/execute`, {
+      method: 'POST',
+      headers: headersA,
+      body: JSON.stringify({
+        token_id: mBare.tok.token_id,
+        nonce: mBare.tok.nonce,
+        action: 'counter.increment',
+        target_ref: 'activation.governed-counter',
+        resource,
+        operation_id: key('omitepoch'),
+        arguments: { delta: 1 },
+      }),
+    })
+    assert.equal(omitRes.status, 200)
+    const omitBody = (await omitRes.json()) as { decision: string; reason: string }
+    assert.equal(omitBody.decision, 'deny')
+    assert.equal(omitBody.reason, 'stale_authority_epoch')
+
+    // 5. 20-Way Distinct-Operation Storm on a single-use mount -> Exactly 1 APPLIED, 19 REJECTED
+    const mDist = await mountInA()
+    const distAdapter = makeAdapter(mDist.id, mDist.tok)
+    const distResults = await Promise.all(
+      Array.from({ length: 20 }, (_, idx) =>
+        distAdapter.execute({
+          idempotencyKey: key(`dist20_${idx}_`),
+          payloadHash: hash,
+          fencingGeneration: 1,
+        }),
+      ),
+    )
+    const distApplied = distResults.filter((r) => r.outcome === 'APPLIED')
+    const distRejected = distResults.filter((r) => r.outcome === 'REJECTED')
+    assert.equal(distApplied.length, 1, `Expected 1 APPLIED in 20-way distinct storm, got ${distApplied.length}`)
+    assert.equal(distRejected.length, 19, `Expected 19 REJECTED in 20-way distinct storm, got ${distRejected.length}`)
+
     if (process.env.CAPPO_PRINT_RESOURCE === '1') {
       console.log(JSON.stringify({ resource, workspace: WS_A, handoverHistoryHead: handoverReceipt.historyHead }))
     }
