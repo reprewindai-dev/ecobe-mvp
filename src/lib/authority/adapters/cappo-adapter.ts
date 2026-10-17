@@ -26,12 +26,26 @@ export type CappoExecutePayload = {
   authority_epoch: number
 }
 
+export type CappoHandoverReceipt = {
+  mountId: string
+  incarnation: number
+  previousAuthorityEpoch: number
+  authorityEpoch: number
+  tokenId: string
+  nonce: string
+  previousHistoryHead: string
+  historyHead: string
+  decisionHash: string
+  anchorStatus: string
+  adapter: CappoTargetAdapter
+}
+
 /**
  * CAPPO Target Adapter (Class B1 - Fenced Consequence Boundary).
  *
  * Enforces hardware/store-side CAS authority epoch fencing at Port 8002.
  * When authority advances (epoch E1 -> E2), any permit bound to E1 is
- * refused at begin_consequence() with Delta C = 0 and error_summary="stale_authority_epoch".
+ * refused at preflight / begin_consequence() with Delta C = 0 and reason="stale_authority_epoch".
  */
 export class CappoTargetAdapter implements TargetAdapter {
   readonly id = 'veklom-cappo-adapter'
@@ -62,6 +76,88 @@ export class CappoTargetAdapter implements TargetAdapter {
     this.resource = config.resource
   }
 
+  private authHeaders(extra?: Record<string, string>): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...extra,
+    }
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey
+    }
+    if (this.bearerToken) {
+      headers.Authorization = `Bearer ${this.bearerToken}`
+    }
+    if (this.workspaceId) {
+      headers['X-Workspace-ID'] = this.workspaceId
+    }
+    return headers
+  }
+
+  /**
+   * Atomic Continuity Handover (D3 -> D0 Successor Incarnation).
+   * Advances authority_epoch on the live mount, chains the cryptographic history_head,
+   * fences any prior incarnation at Epoch K, and returns a new adapter bound to Epoch K+1.
+   */
+  async handoverIncarnation(input: {
+    decisionHash: string
+    reason?: string
+  }): Promise<CappoHandoverReceipt> {
+    const url = `${this.baseUrl}/v1/capability/mounts/${this.mountId}/handover`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify({
+        decision_hash: input.decisionHash,
+        reason: input.reason ?? 'successor_handover',
+      }),
+    })
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`CAPPO handover HTTP ${response.status}: ${detail}`)
+    }
+
+    const body = (await response.json()) as {
+      mount_id: string
+      incarnation: number
+      previous_authority_epoch: number
+      authority_epoch: number
+      token_id: string
+      nonce: string
+      previous_history_head: string
+      history_head: string
+      decision_hash: string
+      anchor_status: string
+    }
+
+    const successorAdapter = new CappoTargetAdapter({
+      baseUrl: this.baseUrl,
+      mountId: this.mountId,
+      tokenId: body.token_id,
+      tokenNonce: body.nonce,
+      bearerToken: this.bearerToken,
+      apiKey: this.apiKey,
+      workspaceId: this.workspaceId,
+      targetRef: this.targetRef,
+      action: this.action,
+      resource: this.resource,
+    })
+
+    return {
+      mountId: body.mount_id,
+      incarnation: body.incarnation,
+      previousAuthorityEpoch: body.previous_authority_epoch,
+      authorityEpoch: body.authority_epoch,
+      tokenId: body.token_id,
+      nonce: body.nonce,
+      previousHistoryHead: body.previous_history_head,
+      historyHead: body.history_head,
+      decisionHash: body.decision_hash,
+      anchorStatus: body.anchor_status,
+      adapter: successorAdapter,
+    }
+  }
+
   async execute(input: {
     idempotencyKey: string
     payloadHash: string
@@ -81,25 +177,15 @@ export class CappoTargetAdapter implements TargetAdapter {
     }
 
     const url = `${this.baseUrl}/v1/capability/mounts/${this.mountId}/execute`
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+    const headers = this.authHeaders({
       'X-Authority-Epoch': String(generation),
-    }
-    if (this.apiKey) {
-      headers['X-API-Key'] = this.apiKey
-    }
-    if (this.bearerToken) {
-      headers.Authorization = `Bearer ${this.bearerToken}`
-    }
-    if (this.workspaceId) {
-      headers['X-Workspace-ID'] = this.workspaceId
-    }
+    })
 
     const payload: CappoExecutePayload = {
       token_id: this.tokenId ?? `token-${input.idempotencyKey.slice(0, 16)}`,
       nonce: this.tokenNonce ?? input.idempotencyKey.slice(16, 48),
       action: this.action ?? 'record.create',
-      target_ref: this.targetRef ?? 'veklom.local-records@v1',
+      target_ref: this.targetRef ?? 'activation.local-record',
       resource: this.resource ?? `co2router-${input.payloadHash.slice(0, 16)}`,
       arguments: {
         idempotencyKey: input.idempotencyKey,
